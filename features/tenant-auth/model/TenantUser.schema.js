@@ -18,6 +18,19 @@ module.exports = (Schema) => {
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, default: false },
 
+    isStaff: { type: Boolean, default: false },
+    position: { type: String, trim: true, maxlength: 120 },
+
+    pinHash: { type: String, default: null },
+    pinKey:  { type: String, default: null }, // deterministic, peppered fingerprint for uniqueness checks
+    pinUpdatedAt: { type: Date },
+    pinLoginFailures: { type: Number, default: 0 },
+    pinLockedUntil: { type: Date, default: null },
+    lastPinLoginAt: { type: Date },
+
+    invitedBy: { type: Schema.Types.ObjectId, ref: 'TenantUser', default: null },
+    metadata: { type: Object },
+
     status:   { type: String, enum: ['active','suspended'], default: 'active' },
     lastLoginAt: { type: Date },
 
@@ -26,5 +39,6 @@ module.exports = (Schema) => {
   }, { timestamps: true });
 
   TenantUserSchema.index({ email: 1 }, { unique: true });
+  TenantUserSchema.index({ pinKey: 1 }, { unique: true, sparse: true });
   return TenantUserSchema;
 };

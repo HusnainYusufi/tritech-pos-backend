@@ -1,0 +1,243 @@
+// features/staff/services/StaffService.js
+'use strict';
+
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+
+const AppError = require('../../../modules/AppError');
+const TenantUserRepo = require('../../tenant-auth/repository/tenantUser.repository');
+const BranchRepo = require('../../branch/repository/branch.repository');
+
+const PIN_PEPPER = process.env.PIN_PEPPER || process.env.JWT_SECRET_KEY || 'pin-pepper';
+const PIN_BCRYPT_ROUNDS = parseInt(process.env.PIN_BCRYPT_ROUNDS || '12', 10);
+const PASSWORD_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '10', 10);
+
+const buildPinSecrets = async (pin) => {
+  if (!pin) return { pinHash: null, pinKey: null, pinUpdatedAt: null };
+  const normalized = String(pin);
+  const pinKey = crypto.createHmac('sha256', PIN_PEPPER).update(normalized).digest('hex');
+  const pinHash = await bcrypt.hash(normalized + PIN_PEPPER, PIN_BCRYPT_ROUNDS);
+  return { pinHash, pinKey, pinUpdatedAt: new Date() };
+};
+
+const sanitizeUser = (userDoc) => {
+  if (!userDoc) return null;
+  const obj = typeof userDoc.toObject === 'function' ? userDoc.toObject() : { ...userDoc };
+  delete obj.passwordHash;
+  delete obj.pinHash;
+  delete obj.pinKey;
+  delete obj.resetToken;
+  delete obj.resetTokenExpiresAt;
+  return obj;
+};
+
+const unique = (arr = []) => Array.from(new Set(arr.map(String)));
+
+async function ensureBranchesExist(conn, branchIds = []) {
+  const uniqueIds = unique(branchIds);
+  if (!uniqueIds.length) throw new AppError('At least one branch is required', 400);
+  const branches = await BranchRepo.findManyByIds(conn, uniqueIds);
+  if (branches.length !== uniqueIds.length) throw new AppError('One or more branches are invalid', 400);
+  return uniqueIds;
+}
+
+async function ensureEmailAvailable(conn, email, excludeUserId = null) {
+  const User = TenantUserRepo.model(conn);
+  const query = excludeUserId ? { email, _id: { $ne: excludeUserId } } : { email };
+  const existing = await User.findOne(query).lean();
+  if (existing) throw new AppError('Email already in use', 409);
+}
+
+function guardBranchScope(actorDoc, branchContextId, targetBranchIds) {
+  const isOwner = (actorDoc.roles || []).includes('owner');
+  const hasTenantWideGrant = Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant');
+  if (isOwner || hasTenantWideGrant || !branchContextId) return;
+
+  const allowed = String(branchContextId);
+  const invalid = targetBranchIds.some((b) => String(b) !== allowed);
+  if (invalid) throw new AppError('Branch managers can only manage staff within their branch', 403);
+}
+
+function filterRoleGrants(grants = [], branchContextId, actorHasTenantScope) {
+  if (!Array.isArray(grants) || !grants.length) return [];
+  const allowedBranch = branchContextId ? String(branchContextId) : null;
+  return grants.filter((g) => {
+    if (g.scope === 'tenant') return actorHasTenantScope;
+    if (g.scope === 'branch') return allowedBranch ? String(g.branchId) === allowedBranch : true;
+    return false;
+  }).map((g) => ({ roleKey: g.roleKey, scope: g.scope || 'tenant', branchId: g.branchId || null }));
+}
+
+async function getActor(conn, actorId) {
+  const actor = await TenantUserRepo.getById(conn, actorId);
+  if (!actor) throw new AppError('Actor not found', 404);
+  return actor;
+}
+
+class StaffService {
+  static async create(conn, actorId, payload, branchContextId = null) {
+    const { fullName, email, password, branchIds, roles, roleGrants = [], pin, position, metadata } = payload;
+
+    const actorDoc = await getActor(conn, actorId);
+    const normalizedBranches = await ensureBranchesExist(conn, branchIds);
+
+    guardBranchScope(actorDoc, branchContextId, normalizedBranches);
+
+    await ensureEmailAvailable(conn, email);
+
+    const { pinHash, pinKey, pinUpdatedAt } = await buildPinSecrets(pin);
+    if (pinKey) {
+      const existingPin = await TenantUserRepo.model(conn).findOne({ pinKey }).lean();
+      if (existingPin) throw new AppError('PIN already in use', 409);
+    }
+
+    const passwordHash = await bcrypt.hash(password || crypto.randomBytes(12).toString('hex'), PASSWORD_ROUNDS);
+    const actorHasTenantScope = (actorDoc.roles || []).includes('owner') || (Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant'));
+    const filteredGrants = filterRoleGrants(roleGrants, branchContextId, actorHasTenantScope);
+
+    const doc = await TenantUserRepo.create(conn, {
+      fullName,
+      email,
+      passwordHash,
+      mustChangePassword: !password,
+      roles: roles?.length ? roles : ['staff'],
+      branchIds: normalizedBranches,
+      roleGrants: filteredGrants,
+      isStaff: true,
+      position: position || undefined,
+      metadata: metadata || undefined,
+      pinHash,
+      pinKey,
+      pinUpdatedAt,
+      invitedBy: actorId,
+      status: 'active'
+    });
+
+    return { status: 200, message: 'Staff member created', result: sanitizeUser(doc) };
+  }
+
+  static async list(conn, actorId, query, branchContextId = null) {
+    const { page = 1, limit = 20, status, branchId, q } = query;
+    const effectiveBranchContext = branchContextId || branchId || null;
+    const actorDoc = await getActor(conn, actorId);
+    const actorHasTenantScope = (actorDoc.roles || []).includes('owner') || (Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant'));
+
+    const filter = { isStaff: true };
+    if (status) filter.status = status;
+    if (effectiveBranchContext) filter.branchIds = effectiveBranchContext;
+    if (q) filter.$or = [
+      { fullName: { $regex: q, $options: 'i' } },
+      { email: { $regex: q, $options: 'i' } }
+    ];
+
+    if (!actorHasTenantScope) {
+      if (effectiveBranchContext) {
+        guardBranchScope(actorDoc, effectiveBranchContext, [effectiveBranchContext]);
+      } else if (Array.isArray(actorDoc.branchIds) && actorDoc.branchIds.length) {
+        filter.branchIds = { $in: actorDoc.branchIds.map(String) };
+      } else {
+        throw new AppError('Branch context is required for branch-scoped managers', 403);
+      }
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const User = TenantUserRepo.model(conn);
+    const [items, count] = await Promise.all([
+      User.find(filter)
+        .select('-passwordHash -pinHash -pinKey -resetToken -resetTokenExpiresAt')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      User.countDocuments(filter)
+    ]);
+
+    return { status: 200, items, count, page: Number(page), limit: Number(limit) };
+  }
+
+  static async get(conn, actorId, id, branchContextId) {
+    const actorDoc = await getActor(conn, actorId);
+    const User = TenantUserRepo.model(conn);
+    const userDoc = await User.findById(id).lean();
+    if (!userDoc) throw new AppError('Staff not found', 404);
+    if (!userDoc.isStaff) throw new AppError('Not a staff account', 400);
+
+    if (branchContextId) guardBranchScope(actorDoc, branchContextId, userDoc.branchIds || []);
+
+    return { status: 200, result: sanitizeUser(userDoc) };
+  }
+
+  static async update(conn, actorId, id, payload, branchContextId = null) {
+    const context = branchContextId || payload.branchId || null;
+    const actorDoc = await getActor(conn, actorId);
+    const User = TenantUserRepo.model(conn);
+    const userDoc = await User.findById(id);
+    if (!userDoc) throw new AppError('Staff not found', 404);
+    if (!userDoc.isStaff) throw new AppError('Not a staff account', 400);
+
+    const nextBranches = payload.branchIds ? await ensureBranchesExist(conn, payload.branchIds) : (userDoc.branchIds || []);
+    guardBranchScope(actorDoc, context, nextBranches);
+
+    if (payload.email && payload.email !== userDoc.email) {
+      await ensureEmailAvailable(conn, payload.email, id);
+      userDoc.email = payload.email;
+    }
+    if (payload.fullName) userDoc.fullName = payload.fullName;
+    if (payload.password) userDoc.passwordHash = await bcrypt.hash(payload.password, PASSWORD_ROUNDS);
+    if (payload.roles) userDoc.roles = payload.roles;
+    if (payload.position !== undefined) userDoc.position = payload.position;
+    if (payload.metadata !== undefined) userDoc.metadata = payload.metadata;
+    userDoc.branchIds = nextBranches;
+
+    if (payload.roleGrants) {
+      const actorHasTenantScope = (actorDoc.roles || []).includes('owner') || (Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant'));
+      userDoc.roleGrants = filterRoleGrants(payload.roleGrants, context, actorHasTenantScope);
+    }
+
+    const saved = await userDoc.save();
+    return { status: 200, message: 'Staff updated', result: sanitizeUser(saved) };
+  }
+
+  static async setPin(conn, actorId, id, payload, branchContextId = null) {
+    const context = branchContextId || payload.branchId || null;
+    const actorDoc = await getActor(conn, actorId);
+    const User = TenantUserRepo.model(conn);
+    const userDoc = await User.findById(id);
+    if (!userDoc) throw new AppError('Staff not found', 404);
+    if (!userDoc.isStaff) throw new AppError('Not a staff account', 400);
+
+    guardBranchScope(actorDoc, context, userDoc.branchIds || []);
+
+    const { pinHash, pinKey, pinUpdatedAt } = await buildPinSecrets(payload.pin);
+    if (pinKey) {
+      const existing = await User.findOne({ _id: { $ne: id }, pinKey }).lean();
+      if (existing) throw new AppError('PIN already in use', 409);
+    }
+
+    userDoc.pinHash = pinHash;
+    userDoc.pinKey = pinKey;
+    userDoc.pinUpdatedAt = pinUpdatedAt;
+    userDoc.pinLoginFailures = 0;
+    userDoc.pinLockedUntil = null;
+
+    const saved = await userDoc.save();
+    return { status: 200, message: 'PIN updated', result: sanitizeUser(saved) };
+  }
+
+  static async setStatus(conn, actorId, id, payload, branchContextId = null) {
+    const context = branchContextId || payload.branchId || null;
+    const actorDoc = await getActor(conn, actorId);
+    const User = TenantUserRepo.model(conn);
+    const userDoc = await User.findById(id);
+    if (!userDoc) throw new AppError('Staff not found', 404);
+    if (!userDoc.isStaff) throw new AppError('Not a staff account', 400);
+
+    guardBranchScope(actorDoc, context, userDoc.branchIds || []);
+
+    userDoc.status = payload.status;
+    const saved = await userDoc.save();
+    return { status: 200, message: 'Status updated', result: sanitizeUser(saved) };
+  }
+}
+
+module.exports = StaffService;
