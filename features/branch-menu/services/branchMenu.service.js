@@ -208,6 +208,25 @@ class BranchMenuService {
       throw new AppError('branchId is required', 400);
     }
 
+    const branch = await BranchRepo.findById(conn, branchId);
+
+    if (!branch) {
+      throw new AppError('Branch not found', 404);
+    }
+
+    const branchSnapshot = {
+      id: branch._id,
+      name: branch.name,
+      code: branch.code,
+      status: branch.status,
+      address: branch.address || null,
+      contact: branch.contact || null,
+      currency: branch.currency,
+      tax: branch.tax || null,
+      timezone: branch.timezone,
+      metadata: branch.metadata || {},
+    };
+
     // 1) Get master menu items with existing service search
     const menuSearch = await MenuItemRepo.search(conn, {
       q,
@@ -277,6 +296,7 @@ class BranchMenuService {
 
       return {
         branchId,
+        branch: branchSnapshot,
         menuItemId: m._id,
         menuItem: {
           id: m._id,
@@ -304,6 +324,7 @@ class BranchMenuService {
       status: 200,
       message: 'Effective branch menu fetched',
       result: {
+        branch: branchSnapshot,
         items,
         page: menuSearch.page,
         limit: menuSearch.limit,
