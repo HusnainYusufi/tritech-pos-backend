@@ -17,7 +17,7 @@ const createStaff = Joi.object({
   fullName: Joi.string().max(120).required(),
   email: Joi.string().email().required(),
   password: Joi.string().min(8).max(128).optional(),
-  branchIds: Joi.array().items(Joi.string()).min(1).required(),
+  branchIds: Joi.array().items(Joi.string()).min(1).optional(),
   roles: Joi.array().items(Joi.string()).optional(),
   roleGrants: Joi.array().items(roleGrantSchema).optional(),
   pin: pinSchema.optional(),
