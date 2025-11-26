@@ -1,0 +1,275 @@
+// features/branch-menu/services/branchMenu.service.js
+'use strict';
+
+const AppError = require('../../../modules/AppError');
+const BranchRepo = require('../../branch/repository/branch.repository');
+const MenuItemRepo = require('../../menu/repository/menuItem.repository');
+const BranchMenuRepo = require('../repository/branchMenu.repository');
+
+class BranchMenuService {
+  /**
+   * Upsert branch-level menu config for a given menuItemId + branchId
+   */
+  static async upsert(conn, payload) {
+    const {
+      branchId,
+      menuItemId,
+      isAvailable,
+      isVisibleInPOS,
+      isVisibleInOnline,
+      sellingPrice,
+      priceIncludesTax,
+      displayOrder,
+      isFeatured,
+      isRecommended,
+      labels,
+      metadata,
+    } = payload;
+
+    if (!branchId || !menuItemId) {
+      throw new AppError('branchId and menuItemId are required', 400);
+    }
+
+    const [branch, menuItem] = await Promise.all([
+      BranchRepo.findById(conn, branchId),
+      MenuItemRepo.findById(conn, menuItemId),
+    ]);
+
+    if (!branch || branch.isDeleted) {
+      throw new AppError('Branch not found', 404);
+    }
+
+    if (!menuItem || menuItem.isDeleted || menuItem.isArchived || !menuItem.isActive) {
+      throw new AppError('Menu item not found or inactive', 404);
+    }
+
+    const category = menuItem.categoryId || menuItem.category;
+
+    const snapshot = {
+      menuItemNameSnapshot: menuItem.name,
+      menuItemSlugSnapshot: menuItem.slug,
+      menuItemCodeSnapshot: menuItem.code,
+      categoryId: category?._id || category || null,
+      categoryNameSnapshot: category?.name || null,
+      categorySlugSnapshot: category?.slug || null,
+      basePriceSnapshot: menuItem.pricing?.basePrice ?? null,
+      currencySnapshot: menuItem.pricing?.currency || 'SAR',
+      taxModeSnapshot: menuItem.pricing?.taxMode || menuItem.taxMode || null,
+      recipeIdSnapshot: menuItem.recipeId || null,
+      isActiveSnapshot: !!menuItem.isActive,
+    };
+
+    const effectivePayload = {
+      branchId,
+      menuItemId,
+      isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
+      isVisibleInPOS: typeof isVisibleInPOS === 'boolean' ? isVisibleInPOS : true,
+      isVisibleInOnline: typeof isVisibleInOnline === 'boolean' ? isVisibleInOnline : true,
+      sellingPrice: typeof sellingPrice === 'number' ? sellingPrice : sellingPrice === null ? null : null,
+      priceIncludesTax:
+        typeof priceIncludesTax === 'boolean'
+          ? priceIncludesTax
+          : menuItem.pricing?.priceIncludesTax || false,
+      displayOrder: typeof displayOrder === 'number' ? displayOrder : 0,
+      isFeatured: !!isFeatured,
+      isRecommended: !!isRecommended,
+      labels: Array.isArray(labels) ? labels : [],
+      metadata: metadata || {},
+      ...snapshot,
+    };
+
+    const existing = await BranchMenuRepo.findOneByBranchAndMenuItem(conn, branchId, menuItemId);
+    let result;
+
+    if (existing) {
+      result = await BranchMenuRepo.updateById(conn, existing._id, effectivePayload);
+    } else {
+      result = await BranchMenuRepo.create(conn, effectivePayload);
+    }
+
+    return {
+      status: 200,
+      message: 'Branch menu configuration saved',
+      result,
+    };
+  }
+
+  /**
+   * Raw list of branch menu configs (no merge with master menu).
+   */
+  static async list(conn, query) {
+    const data = await BranchMenuRepo.search(conn, query);
+    return {
+      status: 200,
+      message: 'Branch menu configurations fetched',
+      result: data,
+    };
+  }
+static async updateById(conn, id, patch) {
+  const existing = await BranchMenuRepo.findById(conn, id);
+  if (!existing) throw new AppError('Branch menu config not found', 404);
+
+  // Do not change these
+  delete patch.branchId;
+  delete patch.menuItemId;
+
+  const updated = await BranchMenuRepo.updateById(conn, id, patch);
+
+  return {
+    status: 200,
+    message: 'Branch menu configuration updated',
+    result: updated,
+  };
+}
+
+  static async getById(conn, id) {
+    const doc = await BranchMenuRepo.findById(conn, id);
+    if (!doc) {
+      throw new AppError('Branch menu config not found', 404);
+    }
+
+    return {
+      status: 200,
+      message: 'Branch menu configuration fetched',
+      result: doc,
+    };
+  }
+
+  static async delete(conn, id) {
+    const doc = await BranchMenuRepo.deleteById(conn, id);
+    if (!doc) {
+      throw new AppError('Branch menu config not found', 404);
+    }
+
+    return {
+      status: 200,
+      message: 'Branch menu configuration deleted',
+      result: doc,
+    };
+  }
+
+  /**
+   * Effective branch menu:
+   * - Fetches all active menu items (master menu)
+   * - Fetches branch configs
+   * - Merges to return final effective menu for POS
+   */
+  static async listEffective(conn, query) {
+    const {
+      branchId,
+      categoryId,
+      q,
+      page = 1,
+      limit = 50,
+    } = query || {};
+
+    if (!branchId) {
+      throw new AppError('branchId is required', 400);
+    }
+
+    // 1) Get master menu items with existing service search
+    const menuSearch = await MenuItemRepo.search(conn, {
+      q,
+      categoryId,
+      isActive: true,
+      page,
+      limit,
+    });
+
+    const menuItems = menuSearch.items || [];
+
+    if (!menuItems.length) {
+      return {
+        status: 200,
+        message: 'No menu items found for this branch',
+        result: {
+          items: [],
+          page: menuSearch.page,
+          limit: menuSearch.limit,
+          count: menuSearch.count,
+        },
+      };
+    }
+
+    const menuItemIds = menuItems.map((m) => m._id);
+    const configs = await BranchMenuRepo.listByBranchAndMenuItemIds(conn, branchId, menuItemIds);
+
+    const configMap = new Map(
+      configs.map((c) => [String(c.menuItemId), c])
+    );
+
+    const items = menuItems.map((m) => {
+      const cfg = configMap.get(String(m._id)) || null;
+
+      const masterBasePrice = m.pricing?.basePrice ?? null;
+      const masterPriceIncludesTax = m.pricing?.priceIncludesTax ?? false;
+
+      const effectivePrice =
+        cfg && cfg.sellingPrice !== null && typeof cfg.sellingPrice === 'number'
+          ? cfg.sellingPrice
+          : masterBasePrice;
+
+      const effectivePriceIncludesTax =
+        cfg && typeof cfg.priceIncludesTax === 'boolean'
+          ? cfg.priceIncludesTax
+          : masterPriceIncludesTax;
+
+      const effectiveIsAvailable =
+        cfg && typeof cfg.isAvailable === 'boolean'
+          ? cfg.isAvailable
+          : !!m.isActive;
+
+      const effectiveIsVisibleInPOS =
+        cfg && typeof cfg.isVisibleInPOS === 'boolean'
+          ? cfg.isVisibleInPOS
+          : true;
+
+      const effectiveIsVisibleInOnline =
+        cfg && typeof cfg.isVisibleInOnline === 'boolean'
+          ? cfg.isVisibleInOnline
+          : true;
+
+      const effectiveDisplayOrder =
+        cfg && typeof cfg.displayOrder === 'number'
+          ? cfg.displayOrder
+          : m.displayOrder || 0;
+
+      return {
+        branchId,
+        menuItemId: m._id,
+        menuItem: {
+          id: m._id,
+          name: m.name,
+          slug: m.slug,
+          code: m.code,
+          description: m.description,
+          category: m.categoryId || null,
+          pricing: m.pricing || {},
+          isActive: m.isActive,
+        },
+        branchConfig: cfg,
+        effective: {
+          price: effectivePrice,
+          priceIncludesTax: effectivePriceIncludesTax,
+          isAvailable: effectiveIsAvailable,
+          isVisibleInPOS: effectiveIsVisibleInPOS,
+          isVisibleInOnline: effectiveIsVisibleInOnline,
+          displayOrder: effectiveDisplayOrder,
+        },
+      };
+    });
+
+    return {
+      status: 200,
+      message: 'Effective branch menu fetched',
+      result: {
+        items,
+        page: menuSearch.page,
+        limit: menuSearch.limit,
+        count: menuSearch.count,
+      },
+    };
+  }
+}
+
+module.exports = BranchMenuService;
