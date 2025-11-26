@@ -27,7 +27,9 @@ const createBranchMenuConfig = Joi.object({
 const updateBranchMenuConfig = Joi.object({
   id: Joi.string().required(),
 
-  branchId: Joi.string().optional(), // optional here; id is primary key
+  branchId: Joi.forbidden(),
+  ifMatchVersion: Joi.number().integer().min(0).optional(),
+  refreshSnapshot: Joi.boolean().optional(),
   isAvailable: Joi.boolean().optional(),
   isVisibleInPOS: Joi.boolean().optional(),
   isVisibleInOnline: Joi.boolean().optional(),
