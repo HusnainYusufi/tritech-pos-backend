@@ -82,7 +82,16 @@ class BranchMenuService {
     let result;
 
     if (existing) {
-      result = await BranchMenuRepo.updateById(conn, existing._id, effectivePayload);
+      result = await BranchMenuRepo.updateById(
+        conn,
+        existing._id,
+        effectivePayload,
+        existing.__v
+      );
+
+      if (!result) {
+        throw new AppError('Branch menu configuration was updated elsewhere', 409);
+      }
     } else {
       result = await BranchMenuRepo.create(conn, effectivePayload);
     }
@@ -105,22 +114,66 @@ class BranchMenuService {
       result: data,
     };
   }
-static async updateById(conn, id, patch) {
-  const existing = await BranchMenuRepo.findById(conn, id);
-  if (!existing) throw new AppError('Branch menu config not found', 404);
+  static async updateById(conn, id, patch) {
+    const existing = await BranchMenuRepo.findById(conn, id);
+    if (!existing) throw new AppError('Branch menu config not found', 404);
 
-  // Do not change these
-  delete patch.branchId;
-  delete patch.menuItemId;
+    const { ifMatchVersion, refreshSnapshot, ...updates } = patch;
 
-  const updated = await BranchMenuRepo.updateById(conn, id, patch);
+    const expectedVersion =
+      typeof ifMatchVersion === 'number' ? ifMatchVersion : existing.__v;
 
-  return {
-    status: 200,
-    message: 'Branch menu configuration updated',
-    result: updated,
-  };
-}
+    if (typeof ifMatchVersion === 'number' && existing.__v !== ifMatchVersion) {
+      throw new AppError('Branch menu configuration was updated elsewhere', 409);
+    }
+
+    // Do not change these
+    delete updates.branchId;
+    delete updates.menuItemId;
+
+    let snapshot = {};
+
+    if (refreshSnapshot) {
+      const menuItem = await MenuItemRepo.findById(conn, existing.menuItemId);
+
+      if (!menuItem || menuItem.isDeleted || menuItem.isArchived || !menuItem.isActive) {
+        throw new AppError('Menu item not found or inactive', 404);
+      }
+
+      const category = menuItem.categoryId || menuItem.category;
+
+      snapshot = {
+        menuItemNameSnapshot: menuItem.name,
+        menuItemSlugSnapshot: menuItem.slug,
+        menuItemCodeSnapshot: menuItem.code,
+        categoryId: category?._id || category || null,
+        categoryNameSnapshot: category?.name || null,
+        categorySlugSnapshot: category?.slug || null,
+        basePriceSnapshot: menuItem.pricing?.basePrice ?? null,
+        currencySnapshot: menuItem.pricing?.currency || 'SAR',
+        taxModeSnapshot: menuItem.pricing?.taxMode || menuItem.taxMode || null,
+        recipeIdSnapshot: menuItem.recipeId || null,
+        isActiveSnapshot: !!menuItem.isActive,
+      };
+    }
+
+    const updated = await BranchMenuRepo.updateById(
+      conn,
+      id,
+      { ...updates, ...snapshot },
+      expectedVersion
+    );
+
+    if (!updated) {
+      throw new AppError('Branch menu configuration was updated elsewhere', 409);
+    }
+
+    return {
+      status: 200,
+      message: 'Branch menu configuration updated',
+      result: updated,
+    };
+  }
 
   static async getById(conn, id) {
     const doc = await BranchMenuRepo.findById(conn, id);
