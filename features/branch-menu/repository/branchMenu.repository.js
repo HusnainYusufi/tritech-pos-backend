@@ -17,9 +17,21 @@ class BranchMenuRepository {
     return BranchMenu(conn).create(payload);
   }
 
-  static async updateById(conn, id, payload) {
+  static async updateById(conn, id, payload, expectedVersion) {
+    const filter = { _id: id };
+
+    if (typeof expectedVersion === 'number') {
+      filter.__v = expectedVersion;
+    }
+
+    const update = { $set: payload };
+
+    if (typeof expectedVersion === 'number') {
+      update.$inc = { __v: 1 };
+    }
+
     return BranchMenu(conn)
-      .findByIdAndUpdate(id, { $set: payload }, { new: true })
+      .findOneAndUpdate(filter, update, { new: true, runValidators: true })
       .lean();
   }
 
