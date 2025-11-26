@@ -1,6 +1,6 @@
 module.exports = {
     apps: [{
-      name: 'Legend-Delivery',
+      name: 'Tritech-Pos-Backend',
       script: 'app.js',
       instances: 1,
       autorestart: true,
