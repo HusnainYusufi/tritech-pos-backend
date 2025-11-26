@@ -33,9 +33,12 @@ const sanitizeUser = (userDoc) => {
 
 const unique = (arr = []) => Array.from(new Set(arr.map(String)));
 
-async function ensureBranchesExist(conn, branchIds = []) {
+async function ensureBranchesExist(conn, branchIds = [], { required = true } = {}) {
   const uniqueIds = unique(branchIds);
-  if (!uniqueIds.length) throw new AppError('At least one branch is required', 400);
+  if (!uniqueIds.length) {
+    if (required) throw new AppError('At least one branch is required', 400);
+    return [];
+  }
   const branches = await BranchRepo.findManyByIds(conn, uniqueIds);
   if (branches.length !== uniqueIds.length) throw new AppError('One or more branches are invalid', 400);
   return uniqueIds;
@@ -68,6 +71,16 @@ function filterRoleGrants(grants = [], branchContextId, actorHasTenantScope) {
   }).map((g) => ({ roleKey: g.roleKey, scope: g.scope || 'tenant', branchId: g.branchId || null }));
 }
 
+function hasTenantScope(actorDoc) {
+  return (actorDoc.roles || []).includes('owner') || (Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant'));
+}
+
+function ensureBranchContext(actorDoc, branchContextId) {
+  if (!hasTenantScope(actorDoc) && !branchContextId) {
+    throw new AppError('Branch context is required for branch-scoped managers', 403);
+  }
+}
+
 async function getActor(conn, actorId) {
   const actor = await TenantUserRepo.getById(conn, actorId);
   if (!actor) throw new AppError('Actor not found', 404);
@@ -79,7 +92,10 @@ class StaffService {
     const { fullName, email, password, branchIds, roles, roleGrants = [], pin, position, metadata } = payload;
 
     const actorDoc = await getActor(conn, actorId);
-    const normalizedBranches = await ensureBranchesExist(conn, branchIds);
+    const actorTenantScope = hasTenantScope(actorDoc);
+    ensureBranchContext(actorDoc, branchContextId);
+
+    const normalizedBranches = await ensureBranchesExist(conn, branchIds, { required: false });
 
     guardBranchScope(actorDoc, branchContextId, normalizedBranches);
 
@@ -92,8 +108,7 @@ class StaffService {
     }
 
     const passwordHash = await bcrypt.hash(password || crypto.randomBytes(12).toString('hex'), PASSWORD_ROUNDS);
-    const actorHasTenantScope = (actorDoc.roles || []).includes('owner') || (Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant'));
-    const filteredGrants = filterRoleGrants(roleGrants, branchContextId, actorHasTenantScope);
+    const filteredGrants = filterRoleGrants(roleGrants, branchContextId, actorTenantScope);
 
     const doc = await TenantUserRepo.create(conn, {
       fullName,
@@ -120,7 +135,7 @@ class StaffService {
     const { page = 1, limit = 20, status, branchId, q } = query;
     const effectiveBranchContext = branchContextId || branchId || null;
     const actorDoc = await getActor(conn, actorId);
-    const actorHasTenantScope = (actorDoc.roles || []).includes('owner') || (Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant'));
+    const actorTenantScope = hasTenantScope(actorDoc);
 
     const filter = { isStaff: true };
     if (status) filter.status = status;
@@ -130,7 +145,7 @@ class StaffService {
       { email: { $regex: q, $options: 'i' } }
     ];
 
-    if (!actorHasTenantScope) {
+    if (!actorTenantScope) {
       if (effectiveBranchContext) {
         guardBranchScope(actorDoc, effectiveBranchContext, [effectiveBranchContext]);
       } else if (Array.isArray(actorDoc.branchIds) && actorDoc.branchIds.length) {
@@ -170,6 +185,7 @@ class StaffService {
   static async update(conn, actorId, id, payload, branchContextId = null) {
     const context = branchContextId || payload.branchId || null;
     const actorDoc = await getActor(conn, actorId);
+    ensureBranchContext(actorDoc, context);
     const User = TenantUserRepo.model(conn);
     const userDoc = await User.findById(id);
     if (!userDoc) throw new AppError('Staff not found', 404);
@@ -190,8 +206,8 @@ class StaffService {
     userDoc.branchIds = nextBranches;
 
     if (payload.roleGrants) {
-      const actorHasTenantScope = (actorDoc.roles || []).includes('owner') || (Array.isArray(actorDoc.roleGrants) && actorDoc.roleGrants.some((g) => g.scope === 'tenant'));
-      userDoc.roleGrants = filterRoleGrants(payload.roleGrants, context, actorHasTenantScope);
+      const actorTenantScope = hasTenantScope(actorDoc);
+      userDoc.roleGrants = filterRoleGrants(payload.roleGrants, context, actorTenantScope);
     }
 
     const saved = await userDoc.save();
@@ -201,6 +217,7 @@ class StaffService {
   static async setPin(conn, actorId, id, payload, branchContextId = null) {
     const context = branchContextId || payload.branchId || null;
     const actorDoc = await getActor(conn, actorId);
+    ensureBranchContext(actorDoc, context);
     const User = TenantUserRepo.model(conn);
     const userDoc = await User.findById(id);
     if (!userDoc) throw new AppError('Staff not found', 404);
@@ -227,6 +244,7 @@ class StaffService {
   static async setStatus(conn, actorId, id, payload, branchContextId = null) {
     const context = branchContextId || payload.branchId || null;
     const actorDoc = await getActor(conn, actorId);
+    ensureBranchContext(actorDoc, context);
     const User = TenantUserRepo.model(conn);
     const userDoc = await User.findById(id);
     if (!userDoc) throw new AppError('Staff not found', 404);
