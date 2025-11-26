@@ -18,6 +18,8 @@ class BranchRepository {
   static async create(conn, d){ return Branch(conn).create(d); }
   static async updateById(conn, id, d){ return Branch(conn).findByIdAndUpdate(id, d, { new: true }); }
   static async getById(conn, id){ return Branch(conn).findById(id).lean(); }
+  // Alias used by some services
+  static async findById(conn, id){ return this.getById(conn, id); }
   static async getByCode(conn, code){ return Branch(conn).findOne({ code: String(code).toLowerCase() }).lean(); }
   static async deleteById(conn, id){ return Branch(conn).findByIdAndDelete(id); }
   static async unsetDefault(conn){ return Branch(conn).updateMany({ isDefault: true }, { $set: { isDefault: false } }); }

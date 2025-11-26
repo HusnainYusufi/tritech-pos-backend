@@ -35,6 +35,11 @@ class MenuItemRepository {
       .lean();
   }
 
+  // Alias to match service expectations
+  static async findById(conn, id) {
+    return this.getById(conn, id);
+  }
+
   // ✅ This is the function your service needs
   static async getBySlug(conn, slug) {
     return MenuItem(conn).findOne({ slug }).lean();
