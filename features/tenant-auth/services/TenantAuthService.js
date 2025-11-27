@@ -9,6 +9,31 @@ const { sendEmail } = require('../../../modules/helper');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 const TOKEN_TTL_DAYS = parseInt(process.env.JWT_TTL_DAYS || '7', 10);
+const PIN_PEPPER = process.env.PIN_PEPPER || process.env.JWT_SECRET_KEY || 'pin-pepper';
+const PIN_LOGIN_MAX_ATTEMPTS = parseInt(process.env.PIN_LOGIN_MAX_ATTEMPTS || '5', 10);
+const PIN_LOGIN_LOCK_MINUTES = parseInt(process.env.PIN_LOGIN_LOCK_MINUTES || '15', 10);
+
+const sanitizeUser = (userDoc) => {
+  if (!userDoc) return null;
+  const obj = typeof userDoc.toObject === 'function' ? userDoc.toObject() : { ...userDoc };
+  delete obj.passwordHash;
+  delete obj.pinHash;
+  delete obj.pinKey;
+  delete obj.resetToken;
+  delete obj.resetTokenExpiresAt;
+  return obj;
+};
+
+const buildPinKey = (pin) => crypto.createHmac('sha256', PIN_PEPPER).update(String(pin)).digest('hex');
+const comparePin = (pin, hash) => bcrypt.compare(String(pin) + PIN_PEPPER, hash);
+const hasTenantScope = (userDoc) => (userDoc?.roles || []).includes('owner') || (Array.isArray(userDoc?.roleGrants) && userDoc.roleGrants.some((g) => g.scope === 'tenant'));
+
+const branchGuard = (userDoc, branchId) => {
+  if (!branchId || hasTenantScope(userDoc)) return true;
+  const branches = (userDoc.branchIds || []).map(String);
+  if (!branches.includes(String(branchId))) throw new AppError('User is not assigned to this branch', 403);
+  return true;
+};
 
 class TenantAuthService {
   static signToken(payload){ return jwt.sign(payload, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` }); }
@@ -54,6 +79,73 @@ class TenantAuthService {
 
     return { status: 200, message: 'Login successful', result: { token,
       user: { _id: userDoc._id, fullName: userDoc.fullName, email: userDoc.email, roles: userDoc.roles, branchIds: userDoc.branchIds } } };
+  }
+
+  static async loginWithPin(conn, { pin, branchId, posId, defaultBranchId }) {
+    const normalizedBranchId = branchId || null;
+    const pinKey = buildPinKey(pin);
+    const User = TenantUserRepo.model(conn);
+    const userDoc = await User.findOne({ pinKey });
+    if (!userDoc || !userDoc.pinHash) throw new AppError('Invalid credentials', 401);
+    if (userDoc.status !== 'active') throw new AppError('Account is not active', 403);
+    if (!userDoc.isStaff) throw new AppError('PIN login is only available for staff accounts', 403);
+
+    const now = new Date();
+    if (userDoc.pinLockedUntil && userDoc.pinLockedUntil > now) {
+      const minutes = Math.ceil((userDoc.pinLockedUntil.getTime() - now.getTime()) / 60000);
+      throw new AppError(`PIN is locked. Try again in ${minutes} minute(s)`, 423);
+    }
+
+    const ok = await comparePin(pin, userDoc.pinHash);
+    if (!ok) {
+      userDoc.pinLoginFailures = (userDoc.pinLoginFailures || 0) + 1;
+      if (userDoc.pinLoginFailures >= PIN_LOGIN_MAX_ATTEMPTS) {
+        userDoc.pinLockedUntil = new Date(Date.now() + PIN_LOGIN_LOCK_MINUTES * 60000);
+        userDoc.pinLoginFailures = 0;
+      }
+      await userDoc.save();
+      throw new AppError('Invalid credentials', 401);
+    }
+
+    const branchIds = (userDoc.branchIds || []).map(String);
+    let effectiveBranch = normalizedBranchId;
+    if (effectiveBranch) branchGuard(userDoc, effectiveBranch);
+    if (!effectiveBranch) {
+      if (!hasTenantScope(userDoc)) {
+        if (branchIds.length === 1) {
+          effectiveBranch = branchIds[0];
+        } else {
+          throw new AppError('branchId is required for branch-scoped staff', 400);
+        }
+      }
+    }
+
+    userDoc.pinLoginFailures = 0;
+    userDoc.pinLockedUntil = null;
+    userDoc.lastPinLoginAt = now;
+    userDoc.lastLoginAt = now;
+    await userDoc.save();
+
+    const token = this.signToken({
+      tenant: true,
+      uid: userDoc._id.toString(),
+      email: userDoc.email,
+      roles: userDoc.roles,
+      branchIds: userDoc.branchIds,
+      branchId: effectiveBranch || null,
+      posId: posId || null,
+      defaultBranchId: defaultBranchId || effectiveBranch || null
+    });
+
+    return {
+      status: 200,
+      message: 'Login successful',
+      result: {
+        token,
+        user: sanitizeUser(userDoc),
+        branchId: effectiveBranch || null
+      }
+    };
   }
 
   /** Invite-based: accept invite & set password (Option B) */
