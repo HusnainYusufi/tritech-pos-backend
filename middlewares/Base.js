@@ -46,6 +46,7 @@ class Base {
                 { url: /^\/api-docs\/?.*/, methods: ['GET'] },
                 { url: '/api-docs.json', methods: ['GET'] },
                 { url: "/t/auth/login", methods: ['GET', 'POST'] },
+                { url: "/t/auth/login-pin", methods: ['GET', 'POST'] },
                 { url: "/t/auth/forgot-password", methods: ['POST'] },
                 { url: "/t/auth/reset-password", methods: ['POST'] },
                 { url: "/t/auth/register-owner", methods: ['POST'] },

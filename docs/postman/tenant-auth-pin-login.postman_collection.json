@@ -1,0 +1,45 @@
+{
+  "info": {
+    "_postman_id": "cb9ab5c4-36c1-4f9d-a09d-7ca6ff9f4f43",
+    "name": "Tenant Auth - Cashier PIN Login",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Sample request for logging in a branch cashier/staff with PIN."
+  },
+  "item": [
+    {
+      "name": "POST /t/auth/login-pin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pin\": \"1234\",\n  \"branchId\": \"64f0c2d9e0bd2f0012a9c001\",\n  \"posId\": \"POS-01\",\n  \"defaultBranchId\": \"64f0c2d9e0bd2f0012a9c001\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/auth/login-pin",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "t",
+            "auth",
+            "login-pin"
+          ]
+        },
+        "description": "Authenticate a staff user via PIN. `branchId` is required for branch-scoped staff unless they have tenant-wide access. `posId` and `defaultBranchId` are optional metadata carried into the JWT."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000"
+    }
+  ]
+}
