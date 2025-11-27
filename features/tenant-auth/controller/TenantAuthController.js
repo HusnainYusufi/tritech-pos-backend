@@ -7,7 +7,7 @@ const logger = require('../../../modules/logger');
 const AppError = require('../../../modules/AppError');
 
 const TenantAuthService = require('../services/TenantAuthService');
-const { registerOwner, login, forgotPassword, resetPassword } = require('../validation/tenantAuth.validation');
+const { registerOwner, login, loginPin, forgotPassword, resetPassword } = require('../validation/tenantAuth.validation');
 
 router.use(tenantContext);
 
@@ -18,6 +18,11 @@ router.post('/register-owner', validate(registerOwner), async (req, res, next) =
 
 router.post('/login', validate(login), async (req, res, next) => {
   try { const r = await TenantAuthService.login(req.tenantDb, req.body); return res.status(r.status).json(r); }
+  catch (e) { logger.error(e); next(e); }
+});
+
+router.post('/login-pin', validate(loginPin), async (req, res, next) => {
+  try { const r = await TenantAuthService.loginWithPin(req.tenantDb, req.body); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
 
