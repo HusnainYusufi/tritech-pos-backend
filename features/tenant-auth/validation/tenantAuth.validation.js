@@ -16,6 +16,15 @@ const login = Joi.object({
   defaultBranchId: Joi.string().allow('', null)
 });
 
+const loginPin = Joi.object({
+  pin: Joi.string().pattern(/^[0-9]{4,8}$/).required().messages({
+    'string.pattern.base': 'PIN must be 4-8 digits'
+  }),
+  branchId: Joi.string().allow('', null),
+  posId: Joi.string().allow('', null),
+  defaultBranchId: Joi.string().allow('', null)
+});
+
 const forgotPassword = Joi.object({
   email: Joi.string().email().required()
 });
@@ -25,4 +34,4 @@ const resetPassword = Joi.object({
   password: Joi.string().min(8).max(128).required()
 });
 
-module.exports = { registerOwner, login, forgotPassword, resetPassword };
+module.exports = { registerOwner, login, loginPin, forgotPassword, resetPassword };
