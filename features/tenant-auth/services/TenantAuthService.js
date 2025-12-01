@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const AppError = require('../../../modules/AppError');
 const logger = require('../../../modules/logger');
 const TenantUserRepo = require('../repository/tenantUser.repository');
+const TillSessionRepo = require('../repository/tillSession.repository');
 const { sendEmail } = require('../../../modules/helper');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
@@ -81,7 +82,7 @@ class TenantAuthService {
       user: { _id: userDoc._id, fullName: userDoc.fullName, email: userDoc.email, roles: userDoc.roles, branchIds: userDoc.branchIds } } };
   }
 
-  static async loginWithPin(conn, { pin, branchId, posId, defaultBranchId }) {
+  static async loginWithPin(conn, { pin, branchId, posId, defaultBranchId, openingAmount, cashCounts, notes }) {
     const normalizedBranchId = branchId || null;
     const pinKey = buildPinKey(pin);
     const User = TenantUserRepo.model(conn);
@@ -120,11 +121,42 @@ class TenantAuthService {
       }
     }
 
+    if (!effectiveBranch) throw new AppError('branchId is required to open a till session', 400);
+
     userDoc.pinLoginFailures = 0;
     userDoc.pinLockedUntil = null;
     userDoc.lastPinLoginAt = now;
     userDoc.lastLoginAt = now;
     await userDoc.save();
+
+    const existingSession = await TillSessionRepo.findOpenByStaffBranchPos(
+      conn,
+      userDoc._id,
+      effectiveBranch,
+      posId || null
+    );
+    if (existingSession) {
+      throw new AppError('An open till session already exists for this branch/POS', 409);
+    }
+
+    const tillSession = await TillSessionRepo.create(conn, {
+      staffId: userDoc._id,
+      branchId: effectiveBranch,
+      posId: posId || null,
+      openingAmount,
+      openedAt: now,
+      cashCounts: cashCounts || null,
+      notes: notes || null,
+      createdBy: userDoc._id.toString()
+    });
+
+    logger.info('Till session opened', {
+      tenant: conn?.name,
+      branchId: effectiveBranch,
+      posId: posId || null,
+      staffId: userDoc._id.toString(),
+      tillSessionId: tillSession._id.toString()
+    });
 
     const token = this.signToken({
       tenant: true,
@@ -134,7 +166,8 @@ class TenantAuthService {
       branchIds: userDoc.branchIds,
       branchId: effectiveBranch || null,
       posId: posId || null,
-      defaultBranchId: defaultBranchId || effectiveBranch || null
+      defaultBranchId: defaultBranchId || effectiveBranch || null,
+      tillSessionId: tillSession._id.toString()
     });
 
     return {
@@ -143,7 +176,94 @@ class TenantAuthService {
       result: {
         token,
         user: sanitizeUser(userDoc),
-        branchId: effectiveBranch || null
+        branchId: effectiveBranch || null,
+        tillSessionId: tillSession._id.toString()
+      }
+    };
+  }
+
+  static async logoutWithPin(conn, userContext, { declaredClosingAmount, systemClosingAmount, cashCounts, notes, branchId, posId, tillSessionId }) {
+    const uid = userContext?.uid;
+    if (!uid) throw new AppError('Unauthorized', 401);
+
+    const User = TenantUserRepo.model(conn);
+    const userDoc = await User.findById(uid);
+    if (!userDoc) throw new AppError('User not found', 404);
+    if (userDoc.status !== 'active') throw new AppError('Account is not active', 403);
+
+    const normalizedBranchId = branchId || userContext.branchId || null;
+    const normalizedPosId = posId || userContext.posId || null;
+    if (normalizedBranchId) branchGuard(userDoc, normalizedBranchId);
+
+    let sessionDoc = null;
+    if (tillSessionId || userContext.tillSessionId) {
+      sessionDoc = await TillSessionRepo.findOpenById(conn, tillSessionId || userContext.tillSessionId);
+    }
+    if (!sessionDoc) {
+      sessionDoc = await TillSessionRepo.findOpenByStaffBranchPos(
+        conn,
+        userDoc._id,
+        normalizedBranchId || undefined,
+        normalizedPosId || null
+      );
+    }
+
+    if (!sessionDoc) throw new AppError('No open till session found for this user/location', 404);
+
+    branchGuard(userDoc, sessionDoc.branchId);
+    const isTenantScoped = hasTenantScope(userDoc);
+    if (!isTenantScoped && String(sessionDoc.staffId) !== String(userDoc._id)) {
+      throw new AppError('Till session belongs to another staff member', 403);
+    }
+    if (normalizedPosId && sessionDoc.posId && sessionDoc.posId !== normalizedPosId) {
+      throw new AppError('Till session is linked to a different POS terminal', 403);
+    }
+
+    const finalSystemAmount = (systemClosingAmount !== undefined && systemClosingAmount !== null)
+      ? systemClosingAmount
+      : (sessionDoc.systemClosingAmount ?? null);
+    const variance = declaredClosingAmount - (finalSystemAmount ?? 0);
+
+    sessionDoc.status = 'closed';
+    sessionDoc.declaredClosingAmount = declaredClosingAmount;
+    sessionDoc.systemClosingAmount = finalSystemAmount;
+    sessionDoc.variance = variance;
+    sessionDoc.closedAt = new Date();
+    sessionDoc.cashCounts = cashCounts || sessionDoc.cashCounts;
+    sessionDoc.notes = notes || sessionDoc.notes;
+    sessionDoc.updatedBy = uid;
+    await sessionDoc.save();
+
+    logger.info('Till session closed', {
+      tenant: conn?.name,
+      branchId: sessionDoc.branchId,
+      posId: sessionDoc.posId,
+      staffId: sessionDoc.staffId,
+      tillSessionId: sessionDoc._id.toString(),
+      variance
+    });
+
+    const token = this.signToken({
+      tenant: true,
+      uid: userDoc._id.toString(),
+      email: userDoc.email,
+      roles: userDoc.roles,
+      branchIds: userDoc.branchIds,
+      branchId: normalizedBranchId || sessionDoc.branchId?.toString() || null,
+      posId: normalizedPosId || sessionDoc.posId || null,
+      defaultBranchId: userContext.defaultBranchId || normalizedBranchId || sessionDoc.branchId?.toString() || null,
+      tillSessionId: null
+    });
+
+    return {
+      status: 200,
+      message: 'Till session closed',
+      result: {
+        token,
+        tillSessionId: sessionDoc._id.toString(),
+        variance,
+        declaredClosingAmount,
+        systemClosingAmount: finalSystemAmount
       }
     };
   }
