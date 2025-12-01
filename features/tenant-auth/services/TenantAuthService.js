@@ -7,6 +7,7 @@ const logger = require('../../../modules/logger');
 const TenantUserRepo = require('../repository/tenantUser.repository');
 const TillSessionRepo = require('../repository/tillSession.repository');
 const { sendEmail } = require('../../../modules/helper');
+const { hasTenantScope, branchGuard } = require('./tenantGuards');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 const TOKEN_TTL_DAYS = parseInt(process.env.JWT_TTL_DAYS || '7', 10);
@@ -27,14 +28,6 @@ const sanitizeUser = (userDoc) => {
 
 const buildPinKey = (pin) => crypto.createHmac('sha256', PIN_PEPPER).update(String(pin)).digest('hex');
 const comparePin = (pin, hash) => bcrypt.compare(String(pin) + PIN_PEPPER, hash);
-const hasTenantScope = (userDoc) => (userDoc?.roles || []).includes('owner') || (Array.isArray(userDoc?.roleGrants) && userDoc.roleGrants.some((g) => g.scope === 'tenant'));
-
-const branchGuard = (userDoc, branchId) => {
-  if (!branchId || hasTenantScope(userDoc)) return true;
-  const branches = (userDoc.branchIds || []).map(String);
-  if (!branches.includes(String(branchId))) throw new AppError('User is not assigned to this branch', 403);
-  return true;
-};
 
 class TenantAuthService {
   static signToken(payload){ return jwt.sign(payload, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` }); }
@@ -82,7 +75,7 @@ class TenantAuthService {
       user: { _id: userDoc._id, fullName: userDoc.fullName, email: userDoc.email, roles: userDoc.roles, branchIds: userDoc.branchIds } } };
   }
 
-  static async loginWithPin(conn, { pin, branchId, posId, defaultBranchId, openingAmount, cashCounts, notes }) {
+  static async loginWithPin(conn, { pin, branchId, posId, defaultBranchId }) {
     const normalizedBranchId = branchId || null;
     const pinKey = buildPinKey(pin);
     const User = TenantUserRepo.model(conn);
@@ -129,35 +122,6 @@ class TenantAuthService {
     userDoc.lastLoginAt = now;
     await userDoc.save();
 
-    const existingSession = await TillSessionRepo.findOpenByStaffBranchPos(
-      conn,
-      userDoc._id,
-      effectiveBranch,
-      posId || null
-    );
-    if (existingSession) {
-      throw new AppError('An open till session already exists for this branch/POS', 409);
-    }
-
-    const tillSession = await TillSessionRepo.create(conn, {
-      staffId: userDoc._id,
-      branchId: effectiveBranch,
-      posId: posId || null,
-      openingAmount,
-      openedAt: now,
-      cashCounts: cashCounts || null,
-      notes: notes || null,
-      createdBy: userDoc._id.toString()
-    });
-
-    logger.info('Till session opened', {
-      tenant: conn?.name,
-      branchId: effectiveBranch,
-      posId: posId || null,
-      staffId: userDoc._id.toString(),
-      tillSessionId: tillSession._id.toString()
-    });
-
     const token = this.signToken({
       tenant: true,
       uid: userDoc._id.toString(),
@@ -167,7 +131,7 @@ class TenantAuthService {
       branchId: effectiveBranch || null,
       posId: posId || null,
       defaultBranchId: defaultBranchId || effectiveBranch || null,
-      tillSessionId: tillSession._id.toString()
+      tillSessionId: null
     });
 
     return {
@@ -177,7 +141,7 @@ class TenantAuthService {
         token,
         user: sanitizeUser(userDoc),
         branchId: effectiveBranch || null,
-        tillSessionId: tillSession._id.toString()
+        tillSessionId: null
       }
     };
   }

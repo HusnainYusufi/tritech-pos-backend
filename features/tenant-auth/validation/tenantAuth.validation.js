@@ -24,10 +24,7 @@ const loginPin = Joi.object({
   }),
   branchId: Joi.string().allow('', null),
   posId: Joi.string().allow('', null),
-  defaultBranchId: Joi.string().allow('', null),
-  openingAmount: money.required(),
-  cashCounts: Joi.object().unknown(true).optional(),
-  notes: Joi.string().max(500).allow('', null)
+  defaultBranchId: Joi.string().allow('', null)
 });
 
 const logoutPin = Joi.object({
