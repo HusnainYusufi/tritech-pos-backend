@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "cb9ab5c4-36c1-4f9d-a09d-7ca6ff9f4f43",
-    "name": "Tenant Auth - Cashier PIN Login",
+    "name": "POS - PIN Login & Till Sessions",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Sample requests for logging in/out a branch cashier/staff with PIN and capturing till balances."
+    "description": "Authenticate a cashier with PIN, then manage till opening/closing as separate POS calls. All requests require the `x-tenant-id` header for the tenant database."
   },
   "item": [
     {
@@ -11,73 +11,70 @@
       "request": {
         "method": "POST",
         "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"pin\": \"1234\",\n  \"branchId\": \"64f0c2d9e0bd2f0012a9c001\",\n  \"posId\": \"POS-01\",\n  \"defaultBranchId\": \"64f0c2d9e0bd2f0012a9c001\",\n  \"openingAmount\": 150.25,\n  \"cashCounts\": {\n    \"100\": 1,\n    \"50\": 1,\n    \"20\": 2\n  },\n  \"notes\": \"Opening till for morning shift\"\n}"
+          "raw": "{\n  \"pin\": \"1234\",\n  \"branchId\": \"64f0c2d9e0bd2f0012a9c001\",\n  \"posId\": \"POS-01\",\n  \"defaultBranchId\": \"64f0c2d9e0bd2f0012a9c001\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/t/auth/login-pin",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "t",
-            "auth",
-            "login-pin"
-          ]
+          "host": [ "{{base_url}}" ],
+          "path": [ "t", "auth", "login-pin" ]
         },
-        "description": "Authenticate a staff user via PIN and open a till session. `openingAmount` is required and the response includes a `tillSessionId` embedded in the JWT. `branchId` is required for branch-scoped staff unless they have tenant-wide access. `posId` and `defaultBranchId` are optional metadata carried into the JWT."
+        "description": "Login a staff member with a PIN. This returns a JWT without opening a till. Use the token in the POS calls below."
       },
       "response": []
     },
     {
-      "name": "POST /t/auth/logout-pin",
+      "name": "POST /t/pos/till/open",
       "request": {
         "method": "POST",
         "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{token}}",
-            "type": "text"
-          }
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"declaredClosingAmount\": 200.75,\n  \"systemClosingAmount\": 198.00,\n  \"cashCounts\": {\n    \"100\": 1,\n    \"50\": 1,\n    \"20\": 2\n  },\n  \"notes\": \"End of shift\",\n  \"branchId\": \"64f0c2d9e0bd2f0012a9c001\",\n  \"posId\": \"POS-01\",\n  \"tillSessionId\": ""\n}"
+          "raw": "{\n  \"branchId\": \"64f0c2d9e0bd2f0012a9c001\",\n  \"posId\": \"POS-01\",\n  \"openingAmount\": 150.25,\n  \"cashCounts\": {\n    \"100\": 1,\n    \"50\": 1,\n    \"20\": 2\n  },\n  \"notes\": \"Opening till for morning shift\"\n}"
         },
         "url": {
-          "raw": "{{base_url}}/t/auth/logout-pin",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "t",
-            "auth",
-            "logout-pin"
-          ]
+          "raw": "{{base_url}}/t/pos/till/open",
+          "host": [ "{{base_url}}" ],
+          "path": [ "t", "pos", "till", "open" ]
         },
-        "description": "Close the open till session for the logged-in staff user. `declaredClosingAmount` is required. Optionally pass `systemClosingAmount` for variance calculations and `tillSessionId` if multiple open sessions could exist (otherwise it will resolve the active one)."
+        "description": "Open a till session after PIN login. Requires Authorization with the staff token. Returns a new JWT with `tillSessionId` for downstream POS calls."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /t/pos/till/close",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"declaredClosingAmount\": 152.0,\n  \"systemClosingAmount\": 150.25,\n  \"cashCounts\": {\n    \"100\": 1,\n    \"50\": 1,\n    \"20\": 1\n  },\n  \"notes\": \"Closing after evening shift\",\n  \"posId\": \"POS-01\",\n  \"tillSessionId\": \"6500c2d9e0bd2f0012a9c123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/pos/till/close",
+          "host": [ "{{base_url}}" ],
+          "path": [ "t", "pos", "till", "close" ]
+        },
+        "description": "Close the active till session for the staff member/branch/POS. If `tillSessionId` is omitted the API resolves the open session by the authenticated user and location metadata."
       },
       "response": []
     }
   ],
   "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:3000"
-    },
-    {
-      "key": "token",
-      "value": "{{pin_login_token}}"
-    }
+    { "key": "base_url", "value": "http://localhost:3000" },
+    { "key": "tenant", "value": "demo-tenant" },
+    { "key": "token", "value": "" }
   ]
 }
