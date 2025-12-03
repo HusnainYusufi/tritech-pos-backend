@@ -59,15 +59,23 @@ class TenantAuthService {
     const ok = await bcrypt.compare(password, userDoc.passwordHash);
     if (!ok) throw new AppError('Invalid credentials', 401);
 
-    if (!branchId) throw new AppError('branchId is required', 400);
     const branchIds = (userDoc.branchIds || []).map(String);
-    if (!hasTenantScope(userDoc)) {
-      if (!branchIds.includes(String(branchId))) {
+    const isTenantScoped = hasTenantScope(userDoc);
+    const normalizedBranchId = branchId || null;
+
+    if (!isTenantScoped) {
+      if (!normalizedBranchId) throw new AppError('branchId is required for branch-scoped users', 400);
+      if (!branchIds.includes(String(normalizedBranchId))) {
         throw new AppError('User is not assigned to this branch', 403);
       }
+      if (!posId) throw new AppError('posId is required for branch-scoped users', 400);
     }
 
-    const terminal = await PosTerminalService.getActiveInBranch(conn, branchId, posId);
+    let terminal = null;
+    if (posId) {
+      if (!normalizedBranchId) throw new AppError('branchId is required when specifying posId', 400);
+      terminal = await PosTerminalService.getActiveInBranch(conn, normalizedBranchId, posId);
+    }
 
     userDoc.lastLoginAt = new Date();
     await userDoc.save();
@@ -78,10 +86,10 @@ class TenantAuthService {
       email: userDoc.email,
       roles: userDoc.roles,
       branchIds: userDoc.branchIds,
-      branchId: branchId || null,
+      branchId: normalizedBranchId || null,
       posId: posId || null,
       posName: terminal?.name || null,
-      defaultBranchId: defaultBranchId || branchId || null
+      defaultBranchId: defaultBranchId || normalizedBranchId || null
     });
 
     return { status: 200, message: 'Login successful', result: { token,

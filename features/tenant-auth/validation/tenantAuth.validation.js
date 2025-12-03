@@ -12,8 +12,8 @@ const registerOwner = Joi.object({
 const login = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),
-  branchId: Joi.string().required(),
-  posId: Joi.string().required(),
+  branchId: Joi.string().allow('', null),
+  posId: Joi.string().allow('', null),
   defaultBranchId: Joi.string().allow('', null)
 });
 
