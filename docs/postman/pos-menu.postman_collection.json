@@ -1,0 +1,79 @@
+{
+  "info": {
+    "name": "POS Menu for Ordering",
+    "description": "Collection for fetching the effective branch menu for POS ordering with category-wise grouping. Requires a tenant token with `menu.items.read` permission.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "GET /t/pos/menu",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenant}}"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/t/pos/menu?branchId={{branchId}}&categoryId={{categoryId}}&q={{search}}&includeUnavailable=false&includeHidden=false&page=1&limit=50",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "t",
+            "pos",
+            "menu"
+          ],
+          "query": [
+            {
+              "key": "branchId",
+              "value": "{{branchId}}",
+              "description": "Required: branch to fetch menu for"
+            },
+            {
+              "key": "categoryId",
+              "value": "{{categoryId}}",
+              "description": "Optional: limit results to a single category"
+            },
+            {
+              "key": "q",
+              "value": "{{search}}",
+              "description": "Optional: search term applied to item name/code"
+            },
+            {
+              "key": "includeUnavailable",
+              "value": "false",
+              "description": "Set true to include items marked unavailable"
+            },
+            {
+              "key": "includeHidden",
+              "value": "false",
+              "description": "Set true to include items hidden from POS"
+            },
+            {
+              "key": "page",
+              "value": "1",
+              "description": "Page number for pagination"
+            },
+            {
+              "key": "limit",
+              "value": "50",
+              "description": "Max results per page (1-500)"
+            }
+          ]
+        },
+        "description": "Fetch the POS-ready menu for a branch, filtered by POS visibility/availability. The response groups items by category for rendering in POS ordering flows."
+      },
+      "response": []
+    }
+  ]
+}
