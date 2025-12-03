@@ -5,7 +5,7 @@ module.exports = (Schema) => {
   const TillSessionSchema = new Schema({
     staffId: { type: Schema.Types.ObjectId, ref: 'TenantUser', required: true },
     branchId: { type: Schema.Types.ObjectId, required: true },
-    posId: { type: String, default: null },
+    posId: { type: Schema.Types.ObjectId, required: true, ref: 'PosTerminal' },
 
     status: { type: String, enum: ['open', 'closed'], default: 'open' },
 
@@ -21,8 +21,8 @@ module.exports = (Schema) => {
     notes: { type: String, trim: true, maxlength: 500 },
   }, { timestamps: true });
 
-  TillSessionSchema.index({ staffId: 1, branchId: 1, posId: 1, status: 1 });
-  TillSessionSchema.index({ staffId: 1, branchId: 1, posId: 1 }, { unique: true, partialFilterExpression: { status: 'open' } });
+  TillSessionSchema.index({ branchId: 1, posId: 1, status: 1 });
+  TillSessionSchema.index({ branchId: 1, posId: 1 }, { unique: true, partialFilterExpression: { status: 'open' } });
 
   TillSessionSchema.plugin(auditPlugin);
 

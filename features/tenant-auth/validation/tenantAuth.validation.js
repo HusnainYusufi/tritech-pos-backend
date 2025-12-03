@@ -12,7 +12,8 @@ const registerOwner = Joi.object({
 const login = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),
-  posId: Joi.string().allow('', null),
+  branchId: Joi.string().required(),
+  posId: Joi.string().required(),
   defaultBranchId: Joi.string().allow('', null)
 });
 
@@ -22,8 +23,8 @@ const loginPin = Joi.object({
   pin: Joi.string().pattern(/^[0-9]{4,8}$/).required().messages({
     'string.pattern.base': 'PIN must be 4-8 digits'
   }),
-  branchId: Joi.string().allow('', null),
-  posId: Joi.string().allow('', null),
+  branchId: Joi.string().required(),
+  posId: Joi.string().required(),
   defaultBranchId: Joi.string().allow('', null)
 });
 
@@ -32,8 +33,8 @@ const logoutPin = Joi.object({
   systemClosingAmount: money.allow(null),
   cashCounts: Joi.object().unknown(true).optional(),
   notes: Joi.string().max(500).allow('', null),
-  branchId: Joi.string().allow('', null),
-  posId: Joi.string().allow('', null),
+  branchId: Joi.string().required(),
+  posId: Joi.string().required(),
   tillSessionId: Joi.string().allow('', null)
 });
 

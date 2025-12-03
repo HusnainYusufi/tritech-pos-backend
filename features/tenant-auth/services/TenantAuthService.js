@@ -8,6 +8,7 @@ const TenantUserRepo = require('../repository/tenantUser.repository');
 const TillSessionRepo = require('../repository/tillSession.repository');
 const { sendEmail } = require('../../../modules/helper');
 const { hasTenantScope, branchGuard } = require('./tenantGuards');
+const PosTerminalService = require('../../pos/services/PosTerminalService');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 const TOKEN_TTL_DAYS = parseInt(process.env.JWT_TTL_DAYS || '7', 10);
@@ -50,13 +51,23 @@ class TenantAuthService {
   }
 
   /** Login */
-  static async login(conn, { email, password, posId, defaultBranchId }) {
+  static async login(conn, { email, password, branchId, posId, defaultBranchId }) {
     const userDoc = await TenantUserRepo.getDocByEmail(conn, email);
     if (!userDoc) throw new AppError('Invalid credentials', 401);
     if (userDoc.status !== 'active') throw new AppError('Account is not active', 403);
 
     const ok = await bcrypt.compare(password, userDoc.passwordHash);
     if (!ok) throw new AppError('Invalid credentials', 401);
+
+    if (!branchId) throw new AppError('branchId is required', 400);
+    const branchIds = (userDoc.branchIds || []).map(String);
+    if (!hasTenantScope(userDoc)) {
+      if (!branchIds.includes(String(branchId))) {
+        throw new AppError('User is not assigned to this branch', 403);
+      }
+    }
+
+    const terminal = await PosTerminalService.getActiveInBranch(conn, branchId, posId);
 
     userDoc.lastLoginAt = new Date();
     await userDoc.save();
@@ -67,8 +78,10 @@ class TenantAuthService {
       email: userDoc.email,
       roles: userDoc.roles,
       branchIds: userDoc.branchIds,
+      branchId: branchId || null,
       posId: posId || null,
-      defaultBranchId: defaultBranchId || null
+      posName: terminal?.name || null,
+      defaultBranchId: defaultBranchId || branchId || null
     });
 
     return { status: 200, message: 'Login successful', result: { token,
@@ -114,7 +127,9 @@ class TenantAuthService {
       }
     }
 
-    if (!effectiveBranch) throw new AppError('branchId is required to open a till session', 400);
+    if (!effectiveBranch) throw new AppError('branchId is required for branch-scoped staff', 400);
+
+    const terminal = await PosTerminalService.getActiveInBranch(conn, effectiveBranch, posId);
 
     userDoc.pinLoginFailures = 0;
     userDoc.pinLockedUntil = null;
@@ -130,6 +145,7 @@ class TenantAuthService {
       branchIds: userDoc.branchIds,
       branchId: effectiveBranch || null,
       posId: posId || null,
+      posName: terminal?.name || null,
       defaultBranchId: defaultBranchId || effectiveBranch || null,
       tillSessionId: null
     });
@@ -158,17 +174,17 @@ class TenantAuthService {
     const normalizedBranchId = branchId || userContext.branchId || null;
     const normalizedPosId = posId || userContext.posId || null;
     if (normalizedBranchId) branchGuard(userDoc, normalizedBranchId);
+    const terminal = await PosTerminalService.getActiveInBranch(conn, normalizedBranchId, normalizedPosId);
 
     let sessionDoc = null;
     if (tillSessionId || userContext.tillSessionId) {
       sessionDoc = await TillSessionRepo.findOpenById(conn, tillSessionId || userContext.tillSessionId);
     }
     if (!sessionDoc) {
-      sessionDoc = await TillSessionRepo.findOpenByStaffBranchPos(
+      sessionDoc = await TillSessionRepo.findOpenByBranchPos(
         conn,
-        userDoc._id,
-        normalizedBranchId || undefined,
-        normalizedPosId || null
+        normalizedBranchId,
+        normalizedPosId
       );
     }
 
@@ -215,6 +231,7 @@ class TenantAuthService {
       branchIds: userDoc.branchIds,
       branchId: normalizedBranchId || sessionDoc.branchId?.toString() || null,
       posId: normalizedPosId || sessionDoc.posId || null,
+      posName: terminal?.name || null,
       defaultBranchId: userContext.defaultBranchId || normalizedBranchId || sessionDoc.branchId?.toString() || null,
       tillSessionId: null
     });
