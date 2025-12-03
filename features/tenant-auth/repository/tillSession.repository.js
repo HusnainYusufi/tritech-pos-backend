@@ -7,6 +7,10 @@ function TillSession(conn) {
 
 class TillSessionRepository {
   static create(conn, data) { return TillSession(conn).create(data); }
+  static findOpenByBranchPos(conn, branchId, posId) {
+    const query = { branchId, posId, status: 'open' };
+    return TillSession(conn).findOne(query);
+  }
   static findOpenByStaffBranchPos(conn, staffId, branchId, posId) {
     const query = { staffId, status: 'open' };
     if (branchId !== undefined) query.branchId = branchId;

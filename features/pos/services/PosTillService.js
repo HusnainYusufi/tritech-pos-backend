@@ -6,6 +6,7 @@ const logger = require('../../../modules/logger');
 const TenantAuthService = require('../../tenant-auth/services/TenantAuthService');
 const TenantUserRepo = require('../../tenant-auth/repository/tenantUser.repository');
 const TillSessionRepo = require('../../tenant-auth/repository/tillSession.repository');
+const PosTerminalService = require('./PosTerminalService');
 const { hasTenantScope, branchGuard } = require('../../tenant-auth/services/tenantGuards');
 
 class PosTillService {
@@ -31,21 +32,26 @@ class PosTillService {
     }
     if (!effectiveBranch) throw new AppError('branchId is required to open a till session', 400);
 
-    const existingSession = await TillSessionRepo.findOpenByStaffBranchPos(
+    const terminal = await PosTerminalService.getActiveInBranch(conn, effectiveBranch, posId);
+
+    const existingSession = await TillSessionRepo.findOpenByBranchPos(
       conn,
-      userDoc._id,
       effectiveBranch,
-      posId || null
+      posId
     );
     if (existingSession) {
-      throw new AppError('An open till session already exists for this branch/POS', 409);
+      const sameStaff = String(existingSession.staffId) === String(userDoc._id);
+      const errorMsg = sameStaff
+        ? 'You already have an open till session on this POS terminal'
+        : 'Another cashier has an open till session on this POS terminal';
+      throw new AppError(errorMsg, 409);
     }
 
     const now = new Date();
     const tillSession = await TillSessionRepo.create(conn, {
       staffId: userDoc._id,
       branchId: effectiveBranch,
-      posId: posId || null,
+      posId,
       openingAmount,
       openedAt: now,
       cashCounts: cashCounts || null,
@@ -69,6 +75,7 @@ class PosTillService {
       branchIds: userDoc.branchIds,
       branchId: effectiveBranch || null,
       posId: posId || null,
+      posName: terminal?.name || null,
       defaultBranchId: userContext.defaultBranchId || effectiveBranch || null,
       tillSessionId: tillSession._id.toString()
     });
@@ -97,17 +104,17 @@ class PosTillService {
     const normalizedBranchId = branchId || userContext.branchId || null;
     const normalizedPosId = posId || userContext.posId || null;
     if (normalizedBranchId) branchGuard(userDoc, normalizedBranchId);
+    const terminal = await PosTerminalService.getActiveInBranch(conn, normalizedBranchId, normalizedPosId);
 
     let sessionDoc = null;
     if (tillSessionId || userContext.tillSessionId) {
       sessionDoc = await TillSessionRepo.findOpenById(conn, tillSessionId || userContext.tillSessionId);
     }
     if (!sessionDoc) {
-      sessionDoc = await TillSessionRepo.findOpenByStaffBranchPos(
+      sessionDoc = await TillSessionRepo.findOpenByBranchPos(
         conn,
-        userDoc._id,
-        normalizedBranchId || undefined,
-        normalizedPosId || null
+        normalizedBranchId,
+        normalizedPosId
       );
     }
 
@@ -118,7 +125,7 @@ class PosTillService {
     if (!isTenantScoped && String(sessionDoc.staffId) !== String(userDoc._id)) {
       throw new AppError('Till session belongs to another staff member', 403);
     }
-    if (normalizedPosId && sessionDoc.posId && sessionDoc.posId !== normalizedPosId) {
+    if (normalizedPosId && sessionDoc.posId && String(sessionDoc.posId) !== String(normalizedPosId)) {
       throw new AppError('Till session is linked to a different POS terminal', 403);
     }
 
@@ -154,6 +161,7 @@ class PosTillService {
       branchIds: userDoc.branchIds,
       branchId: normalizedBranchId || sessionDoc.branchId?.toString() || null,
       posId: normalizedPosId || sessionDoc.posId || null,
+      posName: terminal?.name || null,
       defaultBranchId: userContext.defaultBranchId || normalizedBranchId || sessionDoc.branchId?.toString() || null,
       tillSessionId: null
     });

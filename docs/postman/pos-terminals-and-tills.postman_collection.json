@@ -1,0 +1,147 @@
+{
+  "info": {
+    "_postman_id": "f6f8c9d1-3f3e-4f5c-9f6d-9f6d9f6d9f6d",
+    "name": "POS Terminals & Till Lifecycle",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Manage branch-scoped POS terminals, require a terminal on login, and enforce one open till per device. All requests require the `x-tenant-id` header."
+  },
+  "item": [
+    {
+      "name": "POST /t/pos/terminals",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" },
+          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"machineId\": \"POS-01\",\n  \"name\": \"Front Counter Terminal\",\n  \"status\": \"active\",\n  \"metadata\": { \"ip\": \"10.0.0.5\" }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/pos/terminals",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "terminals"]
+        },
+        "description": "Create a POS terminal under a branch. Requires a tenant admin token with `pos.manage` permissions."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /t/pos/terminals",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "x-tenant-id", "value": "{{tenant}}" },
+          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/t/pos/terminals?branchId={{branchId}}",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "terminals"],
+          "query": [
+            { "key": "branchId", "value": "{{branchId}}" }
+          ]
+        },
+        "description": "List POS terminals for a branch."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /t/auth/login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cashier@example.com\",\n  \"password\": \"changeme\",\n  \"branchId\": \"{{branchId}}\",\n  \"posId\": \"{{posId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["t", "auth", "login"]
+        },
+        "description": "Login with email/password while binding the session to a registered POS terminal."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /t/auth/login-pin",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pin\": \"1234\",\n  \"branchId\": \"{{branchId}}\",\n  \"posId\": \"{{posId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/auth/login-pin",
+          "host": ["{{base_url}}"],
+          "path": ["t", "auth", "login-pin"]
+        },
+        "description": "PIN-based login that requires an active POS terminal in the target branch."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /t/pos/till/open",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"posId\": \"{{posId}}\",\n  \"openingAmount\": 150.25,\n  \"cashCounts\": {\n    \"100\": 1,\n    \"50\": 1,\n    \"20\": 2\n  },\n  \"notes\": \"Opening till for morning shift\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/pos/till/open",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "till", "open"]
+        },
+        "description": "Open a till session for the selected POS terminal. Only one open till is allowed per terminal until closed."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /t/pos/till/close",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-tenant-id", "value": "{{tenant}}" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"posId\": \"{{posId}}\",\n  \"declaredClosingAmount\": 152.0,\n  \"systemClosingAmount\": 150.25,\n  \"cashCounts\": {\n    \"100\": 1,\n    \"50\": 1,\n    \"20\": 1\n  },\n  \"notes\": \"Closing after evening shift\",\n  \"tillSessionId\": \"{{tillSessionId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/pos/till/close",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "till", "close"]
+        },
+        "description": "Close the open till session for the POS terminal and receive a refreshed token with till context cleared."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000" },
+    { "key": "tenant", "value": "demo-tenant" },
+    { "key": "admin_token", "value": "" },
+    { "key": "token", "value": "" },
+    { "key": "branchId", "value": "64f0c2d9e0bd2f0012a9c001" },
+    { "key": "posId", "value": "64f0c2d9e0bd2f0012a9c999" },
+    { "key": "tillSessionId", "value": "" }
+  ]
+}

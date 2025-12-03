@@ -32,5 +32,6 @@ module.exports.routes = (app) => {
   app.use('/t/branch-inventory' , require('../features/branch-inventory/controller/BranchInventoryController'));
   app.use('/t/staff', require('../features/staff/controller/StaffController'));
   app.use('/t/pos', require('../features/pos/controller/PosTillController'));
+  app.use('/t/pos', require('../features/pos/controller/PosTerminalController'));
 
 };
