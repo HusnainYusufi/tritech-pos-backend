@@ -203,7 +203,7 @@ class TenantAuthService {
     if (!isTenantScoped && String(sessionDoc.staffId) !== String(userDoc._id)) {
       throw new AppError('Till session belongs to another staff member', 403);
     }
-    if (normalizedPosId && sessionDoc.posId && sessionDoc.posId !== normalizedPosId) {
+    if (normalizedPosId && sessionDoc.posId && String(sessionDoc.posId) !== String(normalizedPosId)) {
       throw new AppError('Till session is linked to a different POS terminal', 403);
     }
 
