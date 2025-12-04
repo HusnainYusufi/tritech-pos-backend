@@ -8,7 +8,7 @@ const DEFAULT_PERMS = {
   owner:      ['*'],
   admin:      ['dashboard.view','settings.manage','branches.manage','menu.*','inventory.*','orders.*','hr.*','reports.*','billing.*'],
   manager:    ['dashboard.view','menu.*','inventory.*','orders.*','hr.*','reports.*'],
-  cashier:    ['orders.create','orders.read','orders.update','payments.take','customers.read','menu.items.read','pos.till.manage'],
+  cashier:    ['orders.create','orders.read','orders.update','payments.take','customers.read','menu.items.read'],
   kitchen:    ['kitchen.read','kitchen.update','orders.read'],
   inventory:  ['inventory.*','menu.read'],
   hr:         ['hr.*'],
@@ -63,7 +63,6 @@ class TenantRoleService {
     if (SEEDED_TENANTS.has(key)) return;
     await seedDefaultRoles(conn);
     SEEDED_TENANTS.add(key);
-    checkPerms.invalidateRoleCache(tenantSlug);
   }
 
   static async create(conn, d){
