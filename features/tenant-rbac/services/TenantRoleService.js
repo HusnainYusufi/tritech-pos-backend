@@ -6,9 +6,9 @@ const checkPerms = require('../../../middlewares/tenantCheckPermissions');
 
 const DEFAULT_PERMS = {
   owner:      ['*'],
-  admin:      ['dashboard.view','settings.manage','branches.manage','menu.*','inventory.*','orders.*','hr.*','reports.*','billing.*'],
-  manager:    ['dashboard.view','menu.*','inventory.*','orders.*','hr.*','reports.*'],
-  cashier:    ['orders.create','orders.read','orders.update','payments.take','customers.read','menu.items.read'],
+  admin:      ['dashboard.view','settings.manage','branches.manage','menu.*','inventory.*','orders.*','hr.*','reports.*','billing.*','pos.till.manage'],
+  manager:    ['dashboard.view','menu.*','inventory.*','orders.*','hr.*','reports.*','pos.till.manage'],
+  cashier:    ['orders.create','orders.read','orders.update','payments.take','customers.read','menu.items.read','pos.till.manage'],
   kitchen:    ['kitchen.read','kitchen.update','orders.read'],
   inventory:  ['inventory.*','menu.read'],
   hr:         ['hr.*'],
