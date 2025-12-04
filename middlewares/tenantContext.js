@@ -3,6 +3,7 @@
 
 const Tenant = require('../features/tenant/model/Tenant.model');
 const { getTenantConnection } = require('../modules/connectionManager');
+const TenantRoleService = require('../features/tenant-rbac/services/TenantRoleService');
 
 /**
  * Resolves tenant from header "x-tenant-id" OR subdomain.
@@ -39,6 +40,9 @@ async function tenantContext(req, res, next) {
 
     // Get (cached) per-tenant connection
     const tenantDb = await getTenantConnection(tenantSlug, tenantDoc.dbUri);
+
+    // Ensure default roles (and permissions) exist for this tenant DB
+    await TenantRoleService.ensureDefaultsSeeded(tenantDb, tenantSlug);
 
     // Attach context
     req.tenantSlug = tenantSlug;
