@@ -50,7 +50,12 @@ async function loadRolesMap(conn, tenantSlug) {
  *   branchHeader?: string (default 'x-branch-id')
  *   allowOwnerBypass?: boolean (default true)
  */
-module.exports = function(requiredPerms = [], opts = {}) {
+function invalidateRoleCache(tenantSlug) {
+  const key = tenantSlug || '_no_slug_';
+  ROLE_CACHE.delete(key);
+}
+
+function checkTenantPerms(requiredPerms = [], opts = {}) {
   const {
     any = false,
     branchParam = null,
@@ -124,4 +129,8 @@ module.exports = function(requiredPerms = [], opts = {}) {
       next();
     } catch (e) { next(e); }
   };
-};
+}
+
+checkTenantPerms.invalidateRoleCache = invalidateRoleCache;
+
+module.exports = checkTenantPerms;
