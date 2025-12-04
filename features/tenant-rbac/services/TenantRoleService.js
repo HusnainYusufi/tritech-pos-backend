@@ -15,6 +15,9 @@ const DEFAULT_PERMS = {
   viewer:     ['dashboard.view','reports.view','menu.read','inventory.read','orders.read']
 };
 
+// Track which tenants have had default roles seeded in the current process
+const SEEDED_TENANTS = new Set();
+
 async function seedDefaultRoles(conn) {
   const Role = RoleRepo.model(conn);
 
@@ -53,6 +56,13 @@ async function seedDefaultRoles(conn) {
 
 class TenantRoleService {
   static async seedDefaults(conn){ await seedDefaultRoles(conn); }
+
+  static async ensureDefaultsSeeded(conn, tenantSlug=null) {
+    const key = tenantSlug || '_no_slug_';
+    if (SEEDED_TENANTS.has(key)) return;
+    await seedDefaultRoles(conn);
+    SEEDED_TENANTS.add(key);
+  }
 
   static async create(conn, d){
     const key = String(d.key || '').toLowerCase();
