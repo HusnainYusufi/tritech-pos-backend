@@ -2,6 +2,7 @@
 const AppError = require('../../../modules/AppError');
 const RoleRepo = require('../repository/tenantRole.repository');
 const TenantUserRepo = require('../../tenant-auth/repository/tenantUser.repository');
+const checkPerms = require('../../../middlewares/tenantCheckPermissions');
 
 const DEFAULT_PERMS = {
   owner:      ['*'],
