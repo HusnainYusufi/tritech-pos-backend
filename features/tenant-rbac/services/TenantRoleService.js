@@ -7,7 +7,7 @@ const DEFAULT_PERMS = {
   owner:      ['*'],
   admin:      ['dashboard.view','settings.manage','branches.manage','menu.*','inventory.*','orders.*','hr.*','reports.*','billing.*'],
   manager:    ['dashboard.view','menu.*','inventory.*','orders.*','hr.*','reports.*'],
-  cashier:    ['orders.create','orders.read','orders.update','payments.take','customers.read'],
+  cashier:    ['orders.create','orders.read','orders.update','payments.take','customers.read','menu.items.read'],
   kitchen:    ['kitchen.read','kitchen.update','orders.read'],
   inventory:  ['inventory.*','menu.read'],
   hr:         ['hr.*'],
@@ -17,8 +17,6 @@ const DEFAULT_PERMS = {
 
 async function seedDefaultRoles(conn) {
   const Role = RoleRepo.model(conn);
-  const count = await Role.countDocuments({});
-  if (count > 0) return;
 
   const defs = [
     { name:'Owner',      key:'owner',      description:'Full control',   scope:'tenant', permissions: DEFAULT_PERMS.owner, isSystem:true },
@@ -31,7 +29,26 @@ async function seedDefaultRoles(conn) {
     { name:'Accountant', key:'accountant', description:'Accounts',       scope:'tenant', permissions: DEFAULT_PERMS.accountant, isSystem:false },
     { name:'Viewer',     key:'viewer',     description:'Read-only',      scope:'tenant', permissions: DEFAULT_PERMS.viewer, isSystem:false },
   ];
-  await Role.insertMany(defs);
+  for (const def of defs) {
+    const existing = await Role.findOne({ key: def.key });
+    if (!existing) {
+      await Role.create(def);
+      continue;
+    }
+
+    let changed = false;
+    for (const p of def.permissions) {
+      if (!existing.permissions.includes(p)) {
+        existing.permissions.push(p);
+        changed = true;
+      }
+    }
+
+    if (def.scope && existing.scope !== def.scope) { existing.scope = def.scope; changed = true; }
+    if (typeof def.isSystem === 'boolean' && existing.isSystem !== def.isSystem) { existing.isSystem = def.isSystem; changed = true; }
+
+    if (changed) await existing.save();
+  }
 }
 
 class TenantRoleService {
