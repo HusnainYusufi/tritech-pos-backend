@@ -71,35 +71,28 @@ class PosOrderService {
     const taxTotal = 0; // tax engine TBD
     const grandTotal = subTotal + taxTotal;
 
-    const session = await conn.startSession();
-    let orderDoc;
-    try {
-      await session.withTransaction(async () => {
-        orderDoc = await PosOrderRepo.create(conn, {
-          branchId: effectiveBranchId,
-          posId: terminal?._id || posId || null,
-          tillSessionId: normalizedTillSessionId,
-          staffId: userDoc._id,
-          status: 'placed',
-          customerName: customerName || null,
-          notes: notes || null,
-          items: pricedItems,
-          totals: { subTotal, taxTotal, grandTotal },
-          pricingSnapshot: {
-            currency: branchDoc.currency || 'SAR',
-            priceIncludesTax: pricedItems.some((i) => i.priceIncludesTax),
-            taxMode: branchDoc.tax?.mode || null,
-          },
-          createdBy: uid,
-        }, { session });
+    const orderDoc = await PosOrderRepo.create(conn, {
+      branchId: effectiveBranchId,
+      posId: terminal?._id || posId || null,
+      tillSessionId: normalizedTillSessionId,
+      staffId: userDoc._id,
+      status: 'placed',
+      customerName: customerName || null,
+      notes: notes || null,
+      items: pricedItems,
+      totals: { subTotal, taxTotal, grandTotal },
+      pricingSnapshot: {
+        currency: branchDoc.currency || 'SAR',
+        priceIncludesTax: pricedItems.some((i) => i.priceIncludesTax),
+        taxMode: branchDoc.tax?.mode || null,
+      },
+      createdBy: uid,
+    });
 
-        await InventoryHooks.deductStock(conn, tenantSlug, orderDoc, { session, actorId: uid, orderId: orderDoc._id });
-      });
+    try {
+      await InventoryHooks.deductStock(conn, tenantSlug, orderDoc);
     } catch (err) {
-      logger.error('[PosOrderService] Failed to place order', err);
-      throw err;
-    } finally {
-      session.endSession();
+      logger.error('[PosOrderService] inventory deduction failed', err);
     }
 
     return {

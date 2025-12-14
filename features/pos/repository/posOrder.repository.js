@@ -11,8 +11,8 @@ function PosOrder(conn) {
 class PosOrderRepository {
   static model(conn) { return PosOrder(conn); }
 
-  static async create(conn, payload, options = {}) {
-    return PosOrder(conn).create(payload, options);
+  static async create(conn, payload) {
+    return PosOrder(conn).create(payload);
   }
 }
 
