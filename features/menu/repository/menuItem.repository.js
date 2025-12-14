@@ -45,6 +45,12 @@ class MenuItemRepository {
     return MenuItem(conn).findOne({ slug }).lean();
   }
 
+  static async findByIds(conn, ids = []) {
+    const normalizedIds = (ids || []).filter(Boolean);
+    if (!normalizedIds.length) return [];
+    return MenuItem(conn).find({ _id: { $in: normalizedIds } }).lean();
+  }
+
   static async deleteById(conn, id) {
     return MenuItem(conn).findByIdAndDelete(id);
   }

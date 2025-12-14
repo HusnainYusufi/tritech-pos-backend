@@ -34,5 +34,6 @@ module.exports.routes = (app) => {
   app.use('/t/pos', require('../features/pos/controller/PosMenuController'));
   app.use('/t/pos', require('../features/pos/controller/PosTillController'));
   app.use('/t/pos', require('../features/pos/controller/PosTerminalController'));
+  app.use('/t/pos', require('../features/pos/controller/PosOrderController'));
 
 };
