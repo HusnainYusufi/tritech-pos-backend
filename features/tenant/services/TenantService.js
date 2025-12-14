@@ -6,6 +6,7 @@ const logger = require('../../../modules/logger');
 const { sendEmail } = require('../../../modules/helper');
 const { buildWelcomeEmailTemplate } = require('../../../modules/emailTemplates');
 const TenantRoleService = require('../../tenant-rbac/services/TenantRoleService');
+const { buildTenantDbUri } = require('../../../modules/mongoUri');
 
 
 // for seeding Owner user + invite
@@ -28,10 +29,11 @@ class TenantService {
    * - Stores tenant doc in admin DB with dbUri
    * - Sends invite email to Owner
    */
-static async create(data) {
-  // 1) basic guards
-  const slug = String(data.slug).toLowerCase();
-  const exists = await TenantRepo.getBySlug(slug);
+  static async create(data) {
+    // 1) basic guards
+    const slug = String(data.slug).toLowerCase();
+    const dbName = `tenant_${slug}`;
+    const exists = await TenantRepo.getBySlug(slug);
   if (exists) throw new AppError('Slug already exists', 409);
 
   if (data.planId) {
@@ -40,9 +42,7 @@ static async create(data) {
   }
 
   // 2) build the tenant DB URI from MONGO_URI_MAIN (no db name here!)
-  const baseUri = process.env.MONGO_URI_MAIN || 'mongodb://localhost:27017';
-  const dbName = `tenant_${slug}`;
-  const tenantDbUri = `${baseUri}/${dbName}`;
+  const tenantDbUri = buildTenantDbUri(slug);
 
   let tempConn;
   let inviteInfo = null;

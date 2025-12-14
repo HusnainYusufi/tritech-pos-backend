@@ -3,6 +3,7 @@
 
 const mongoose = require('mongoose');
 const logger = require('./logger');
+const { withAuthSource } = require('./mongoUri');
 
 const connectionCache = {}; // slug -> mongoose.Connection
 
@@ -18,8 +19,11 @@ async function getTenantConnection(tenantSlug, dbUri) {
 
   if (!dbUri) throw new Error(`getTenantConnection: dbUri required for "${tenantSlug}"`);
 
+  // Ensure authSource is present so SCRAM auth matches the admin DB configuration
+  const normalizedUri = withAuthSource(dbUri);
+
   logger.info(`Connecting tenant DB: ${tenantSlug}`);
-  const conn = await mongoose.createConnection(dbUri, {
+  const conn = await mongoose.createConnection(normalizedUri, {
     // modern options no longer required in latest mongoose,
     // but harmless if you're on older versions:
     useNewUrlParser: true,
