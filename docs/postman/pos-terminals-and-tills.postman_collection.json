@@ -108,7 +108,7 @@
           "host": ["{{base_url}}"],
           "path": ["t", "pos", "till", "open"]
         },
-        "description": "Open a till session for the selected POS terminal. Only one open till is allowed per terminal until closed."
+        "description": "Open a till session for the selected POS terminal. Only one open till is allowed per terminal until closed. Requires `pos.till.manage` permission."
       },
       "response": []
     },
@@ -130,7 +130,7 @@
           "host": ["{{base_url}}"],
           "path": ["t", "pos", "till", "close"]
         },
-        "description": "Close the open till session for the POS terminal and receive a refreshed token with till context cleared."
+        "description": "Close the open till session for the POS terminal and receive a refreshed token with till context cleared. Requires `pos.till.manage` permission."
       },
       "response": []
     }
