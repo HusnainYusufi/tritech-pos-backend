@@ -1,0 +1,57 @@
+// features/pos/model/PosOrder.schema.js
+'use strict';
+
+const auditPlugin = require('../../../modules/audit.plugin');
+
+module.exports = (Schema) => {
+  const PosOrderItemSchema = new Schema({
+    menuItemId: { type: Schema.Types.ObjectId, ref: 'MenuItem', required: true },
+    recipeIdSnapshot: { type: Schema.Types.ObjectId, ref: 'Recipe', default: null },
+    nameSnapshot: { type: String, trim: true },
+    codeSnapshot: { type: String, trim: true },
+    categoryIdSnapshot: { type: Schema.Types.ObjectId, ref: 'MenuCategory', default: null },
+    quantity: { type: Number, min: 1, required: true },
+    unitPrice: { type: Number, min: 0, default: 0 },
+    lineTotal: { type: Number, min: 0, default: 0 },
+    priceIncludesTax: { type: Boolean, default: false },
+    notes: { type: String, trim: true, maxlength: 500 },
+    metadata: { type: Schema.Types.Mixed },
+  }, { _id: false });
+
+  const PosOrderSchema = new Schema({
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
+    posId: { type: Schema.Types.ObjectId, ref: 'PosTerminal', default: null },
+    tillSessionId: { type: Schema.Types.ObjectId, ref: 'TillSession', default: null },
+    staffId: { type: Schema.Types.ObjectId, ref: 'TenantUser', required: true },
+    status: {
+      type: String,
+      enum: ['placed', 'paid', 'void'],
+      default: 'placed',
+    },
+    customerName: { type: String, trim: true, maxlength: 120 },
+    notes: { type: String, trim: true, maxlength: 500 },
+    items: {
+      type: [PosOrderItemSchema],
+      default: [],
+      validate: [(arr) => Array.isArray(arr) && arr.length > 0, 'Order must have at least one item'],
+    },
+    totals: {
+      subTotal: { type: Number, min: 0, default: 0 },
+      taxTotal: { type: Number, min: 0, default: 0 },
+      grandTotal: { type: Number, min: 0, default: 0 },
+    },
+    pricingSnapshot: {
+      currency: { type: String, trim: true, default: 'SAR' },
+      priceIncludesTax: { type: Boolean, default: false },
+      taxMode: { type: String, trim: true, default: null },
+    },
+  }, { timestamps: true });
+
+  PosOrderSchema.index({ branchId: 1, createdAt: -1 });
+  PosOrderSchema.index({ staffId: 1, createdAt: -1 });
+  PosOrderSchema.index({ tillSessionId: 1 });
+
+  PosOrderSchema.plugin(auditPlugin);
+
+  return PosOrderSchema;
+};

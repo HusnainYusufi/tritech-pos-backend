@@ -6,8 +6,8 @@ function InventoryTxn(conn) { return getTenantModel(conn, 'InventoryTxn', factor
 
 class InventoryTxnRepository {
   static model(conn){ return InventoryTxn(conn); }
-  static async create(conn, d){ return InventoryTxn(conn).create(d); }
-  static async insertMany(conn, docs){ return InventoryTxn(conn).insertMany(docs); }
+  static async create(conn, d, options = {}){ return InventoryTxn(conn).create(d, options); }
+  static async insertMany(conn, docs, options = {}){ return InventoryTxn(conn).insertMany(docs, options); }
   static async search(conn, { branchId, itemId, type, dateFrom, dateTo, page=1, limit=50 }){
     const filter = {};
     if (branchId) filter.branchId = branchId;
