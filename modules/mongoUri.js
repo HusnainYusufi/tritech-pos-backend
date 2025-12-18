@@ -19,13 +19,36 @@ function getDefaultAuthSource() {
 
 function withAuthSource(dbUri) {
   if (!dbUri) return dbUri;
+  
   try {
+    // Check if it's a valid MongoDB URI format
+    if (!dbUri.startsWith('mongodb://') && !dbUri.startsWith('mongodb+srv://')) {
+      console.warn(`[mongoUri] Invalid MongoDB URI format: ${dbUri}`);
+      return dbUri;
+    }
+
     const parsed = new URL(dbUri);
     if (!parsed.searchParams.has('authSource')) {
       parsed.searchParams.set('authSource', getDefaultAuthSource());
     }
     return parsed.toString();
   } catch (err) {
+    console.error(`[mongoUri] Failed to parse URI: ${dbUri}`, err.message);
+    // If URL parsing fails, try manual string manipulation as fallback
+    try {
+      const authSource = getDefaultAuthSource();
+      if (dbUri.includes('?')) {
+        // Already has query params
+        if (!dbUri.includes('authSource=')) {
+          return `${dbUri}&authSource=${authSource}`;
+        }
+      } else {
+        // No query params yet
+        return `${dbUri}?authSource=${authSource}`;
+      }
+    } catch (fallbackErr) {
+      console.error(`[mongoUri] Fallback parsing also failed`, fallbackErr.message);
+    }
     return dbUri;
   }
 }
