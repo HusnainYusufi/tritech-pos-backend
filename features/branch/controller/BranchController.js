@@ -24,9 +24,12 @@ router.post('/',
   }
 );
 
-// List
+// List branches
+// PUBLIC ENDPOINT - No authentication required
+// This is needed for the cashier login screen to show available branches
 router.get('/',
-  checkPerms(['branches.read'], { any: true }),
+  // NO checkPerms - this is public for cashier login flow
+  // Cashiers need to select their branch BEFORE logging in
   async (req, res, next) => {
     try {
       const r = await svc.list(req.tenantDb, req.query);
