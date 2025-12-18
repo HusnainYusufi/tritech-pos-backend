@@ -58,6 +58,15 @@ function buildTenantDbUri(slug) {
   const dbName = `tenant_${slug}`;
 
   try {
+    // Validate base URI format
+    if (!baseUri.startsWith('mongodb://') && !baseUri.startsWith('mongodb+srv://')) {
+      console.warn(`[mongoUri] Invalid base MongoDB URI format: ${baseUri}`);
+      // Fallback to string concat
+      const authSource = getDefaultAuthSource();
+      const suffix = baseUri.includes('?') ? `&authSource=${authSource}` : `?authSource=${authSource}`;
+      return `${baseUri.replace(/\/+$/, '')}/${dbName}${suffix}`;
+    }
+
     const parsed = new URL(baseUri);
     parsed.pathname = `/${dbName}`;
     if (!parsed.searchParams.has('authSource')) {
@@ -65,8 +74,10 @@ function buildTenantDbUri(slug) {
     }
     return parsed.toString();
   } catch (err) {
+    console.error(`[mongoUri] Failed to build tenant URI for ${slug}:`, err.message);
     // Fallback to string concat if URL parsing fails
-    const suffix = baseUri.includes('?') ? '' : `?authSource=${getDefaultAuthSource()}`;
+    const authSource = getDefaultAuthSource();
+    const suffix = baseUri.includes('?') ? `&authSource=${authSource}` : `?authSource=${authSource}`;
     return `${baseUri.replace(/\/+$/, '')}/${dbName}${suffix}`;
   }
 }
