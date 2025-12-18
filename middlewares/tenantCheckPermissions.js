@@ -99,21 +99,29 @@ function checkTenantPerms(requiredPerms = [], opts = {}) {
       const rolesMap = await loadRolesMap(conn, tenant.slug);
       const granted = new Set();
 
-      // coarse roles -> all role permissions
+      // coarse roles -> grant all permissions (legacy behavior for backward compatibility)
+      // NOTE: This treats roles array as "always active" regardless of scope.
+      // For proper branch-scoped permissions, use roleGrants array instead.
       for (const k of coarseRoles) {
         const r = rolesMap[k];
         if (!r) continue;
+        
+        // Grant permissions from coarse roles
+        // This ensures cashiers with roles=['cashier'] can access POS endpoints
         for (const p of r.permissions) granted.add(p);
       }
 
       // fine-grained roleGrants (respect scope)
+      // This is the NEW way to assign roles with proper branch scoping
       if (Array.isArray(userDoc.roleGrants)) {
         for (const g of userDoc.roleGrants) {
           const r = rolesMap[g.roleKey];
           if (!r) continue;
           if (r.scope === 'tenant') {
+            // Tenant-scoped roles grant permissions everywhere
             for (const p of r.permissions) granted.add(p);
           } else if (r.scope === 'branch') {
+            // Branch-scoped roles only grant permissions for matching branch
             if (g.branchId && ctxBranchId && String(g.branchId) === String(ctxBranchId)) {
               for (const p of r.permissions) granted.add(p);
             }
