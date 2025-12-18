@@ -12,29 +12,62 @@ const connectionCache = {}; // slug -> mongoose.Connection
  * We pass dbUri to avoid re-querying Tenant inside this module.
  */
 async function getTenantConnection(tenantSlug, dbUri) {
-  if (!tenantSlug) throw new Error('getTenantConnection: tenantSlug required');
+  if (!tenantSlug) {
+    const err = new Error('getTenantConnection: tenantSlug required');
+    logger.error('[connectionManager] Missing tenantSlug', { error: err.message });
+    throw err;
+  }
 
   // Already cached?
-  if (connectionCache[tenantSlug]) return connectionCache[tenantSlug];
+  if (connectionCache[tenantSlug]) {
+    logger.info(`[connectionManager] Using cached connection: ${tenantSlug}`);
+    return connectionCache[tenantSlug];
+  }
 
-  if (!dbUri) throw new Error(`getTenantConnection: dbUri required for "${tenantSlug}"`);
+  if (!dbUri) {
+    const err = new Error(`getTenantConnection: dbUri required for "${tenantSlug}"`);
+    logger.error('[connectionManager] Missing dbUri', { tenantSlug, error: err.message });
+    throw err;
+  }
 
-  // Ensure authSource is present so SCRAM auth matches the admin DB configuration
-  const normalizedUri = withAuthSource(dbUri);
+  try {
+    // Ensure authSource is present so SCRAM auth matches the admin DB configuration
+    const normalizedUri = withAuthSource(dbUri);
+    
+    logger.info(`[connectionManager] Connecting tenant DB: ${tenantSlug}`, {
+      originalUri: dbUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@'),
+      normalizedUri: normalizedUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@')
+    });
 
-  logger.info(`Connecting tenant DB: ${tenantSlug}`);
-  const conn = await mongoose.createConnection(normalizedUri, {
-    // modern options no longer required in latest mongoose,
-    // but harmless if you're on older versions:
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+    const conn = await mongoose.createConnection(normalizedUri, {
+      // modern options no longer required in latest mongoose,
+      // but harmless if you're on older versions:
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
 
-  conn.on('error', (err) => logger.error(`Mongo error [${tenantSlug}]`, { message: err.message, stack: err.stack }));
-  conn.once('open', () => logger.info(`Tenant DB ready [${tenantSlug}]`));
+    conn.on('error', (err) => {
+      logger.error(`[connectionManager] Mongo error [${tenantSlug}]`, { 
+        message: err.message, 
+        stack: err.stack 
+      });
+    });
+    
+    conn.once('open', () => {
+      logger.info(`[connectionManager] Tenant DB ready [${tenantSlug}]`);
+    });
 
-  connectionCache[tenantSlug] = conn;
-  return conn;
+    connectionCache[tenantSlug] = conn;
+    logger.info(`[connectionManager] Connection cached: ${tenantSlug}`);
+    return conn;
+  } catch (err) {
+    logger.error(`[connectionManager] Failed to connect tenant DB: ${tenantSlug}`, {
+      message: err.message,
+      stack: err.stack,
+      dbUri: dbUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@')
+    });
+    throw err;
+  }
 }
 
 function clearTenantConnection(tenantSlug) {
