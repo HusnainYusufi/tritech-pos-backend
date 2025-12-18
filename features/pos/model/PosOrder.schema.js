@@ -19,16 +19,18 @@ module.exports = (Schema) => {
   }, { _id: false });
 
   const PosOrderSchema = new Schema({
+    orderNumber: { type: String, required: true, unique: true, index: true },
     branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
     posId: { type: Schema.Types.ObjectId, ref: 'PosTerminal', default: null },
     tillSessionId: { type: Schema.Types.ObjectId, ref: 'TillSession', default: null },
     staffId: { type: Schema.Types.ObjectId, ref: 'TenantUser', required: true },
     status: {
       type: String,
-      enum: ['placed', 'paid', 'void'],
+      enum: ['placed', 'paid', 'void', 'refunded'],
       default: 'placed',
     },
     customerName: { type: String, trim: true, maxlength: 120 },
+    customerPhone: { type: String, trim: true, maxlength: 20 },
     notes: { type: String, trim: true, maxlength: 500 },
     items: {
       type: [PosOrderItemSchema],
@@ -38,12 +40,21 @@ module.exports = (Schema) => {
     totals: {
       subTotal: { type: Number, min: 0, default: 0 },
       taxTotal: { type: Number, min: 0, default: 0 },
+      discount: { type: Number, min: 0, default: 0 },
       grandTotal: { type: Number, min: 0, default: 0 },
+    },
+    payment: {
+      method: { type: String, enum: ['cash','card','mobile','split'], default: 'cash' },
+      amountPaid: { type: Number, min: 0, default: 0 },
+      change: { type: Number, min: 0, default: 0 },
+      paidAt: { type: Date, default: null },
+      reference: { type: String, trim: true, default: '' },
     },
     pricingSnapshot: {
       currency: { type: String, trim: true, default: 'SAR' },
       priceIncludesTax: { type: Boolean, default: false },
       taxMode: { type: String, trim: true, default: null },
+      taxRate: { type: Number, min: 0, default: 0 },
     },
   }, { timestamps: true });
 

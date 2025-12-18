@@ -1,0 +1,469 @@
+{
+  "examples": [
+    {
+      "name": "Pizza with Size Variations",
+      "description": "Classic pizza restaurant use case with different sizes",
+      "request": {
+        "name": "Margherita Pizza",
+        "code": "PIZZA-001",
+        "description": "Classic Italian pizza with tomato sauce, mozzarella, and fresh basil",
+        "type": "final",
+        "ingredients": [
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12345",
+            "quantity": 200,
+            "unit": "g",
+            "nameSnapshot": "Pizza Dough"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12346",
+            "quantity": 100,
+            "unit": "g",
+            "nameSnapshot": "Tomato Sauce"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12347",
+            "quantity": 150,
+            "unit": "g",
+            "nameSnapshot": "Mozzarella Cheese"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12348",
+            "quantity": 10,
+            "unit": "g",
+            "nameSnapshot": "Fresh Basil"
+          }
+        ],
+        "yield": 1,
+        "isActive": true,
+        "variations": [
+          {
+            "name": "Small (8 inch)",
+            "description": "Perfect for one person",
+            "type": "size",
+            "sizeMultiplier": 0.7,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "Medium (12 inch)",
+            "description": "Standard size, serves 2-3",
+            "type": "size",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "Large (16 inch)",
+            "description": "Great for sharing, serves 4-5",
+            "type": "size",
+            "sizeMultiplier": 1.5,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "Extra Large (20 inch)",
+            "description": "Party size, serves 6-8",
+            "type": "size",
+            "sizeMultiplier": 2,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Coffee with Flavor Variations",
+      "description": "Coffee shop with different syrup flavors",
+      "request": {
+        "name": "Latte",
+        "code": "COFFEE-002",
+        "description": "Espresso with steamed milk",
+        "type": "final",
+        "ingredients": [
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12350",
+            "quantity": 30,
+            "unit": "ml",
+            "nameSnapshot": "Espresso"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12351",
+            "quantity": 200,
+            "unit": "ml",
+            "nameSnapshot": "Milk"
+          }
+        ],
+        "yield": 1,
+        "variations": [
+          {
+            "name": "Vanilla Latte",
+            "description": "With vanilla syrup",
+            "type": "flavor",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0.50,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12352",
+                "quantity": 20,
+                "unit": "ml",
+                "nameSnapshot": "Vanilla Syrup"
+              }
+            ],
+            "isActive": true
+          },
+          {
+            "name": "Caramel Latte",
+            "description": "With caramel syrup",
+            "type": "flavor",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0.50,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12353",
+                "quantity": 20,
+                "unit": "ml",
+                "nameSnapshot": "Caramel Syrup"
+              }
+            ],
+            "isActive": true
+          },
+          {
+            "name": "Hazelnut Latte",
+            "description": "With hazelnut syrup",
+            "type": "flavor",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0.50,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12354",
+                "quantity": 20,
+                "unit": "ml",
+                "nameSnapshot": "Hazelnut Syrup"
+              }
+            ],
+            "isActive": true
+          },
+          {
+            "name": "Mocha Latte",
+            "description": "With chocolate syrup",
+            "type": "flavor",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0.75,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12355",
+                "quantity": 30,
+                "unit": "ml",
+                "nameSnapshot": "Chocolate Syrup"
+              }
+            ],
+            "isActive": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Burger with Patty Variations",
+      "description": "Burger joint with different patty counts",
+      "request": {
+        "name": "Classic Burger",
+        "code": "BURGER-001",
+        "description": "Beef burger with lettuce, tomato, and special sauce",
+        "type": "final",
+        "ingredients": [
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12360",
+            "quantity": 1,
+            "unit": "pc",
+            "nameSnapshot": "Burger Bun"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12361",
+            "quantity": 150,
+            "unit": "g",
+            "nameSnapshot": "Beef Patty"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12362",
+            "quantity": 30,
+            "unit": "g",
+            "nameSnapshot": "Lettuce"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12363",
+            "quantity": 40,
+            "unit": "g",
+            "nameSnapshot": "Tomato"
+          },
+          {
+            "sourceType": "recipe",
+            "sourceId": "65a1234567890abcdef12364",
+            "quantity": 1,
+            "unit": "portion",
+            "nameSnapshot": "Special Sauce"
+          }
+        ],
+        "yield": 1,
+        "variations": [
+          {
+            "name": "Single Patty",
+            "description": "One beef patty",
+            "type": "custom",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "Double Patty",
+            "description": "Two beef patties",
+            "type": "custom",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 3.50,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12361",
+                "quantity": 150,
+                "unit": "g",
+                "nameSnapshot": "Extra Beef Patty"
+              }
+            ],
+            "isActive": true
+          },
+          {
+            "name": "Triple Patty",
+            "description": "Three beef patties",
+            "type": "custom",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 7.00,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12361",
+                "quantity": 300,
+                "unit": "g",
+                "nameSnapshot": "Extra Beef Patties"
+              }
+            ],
+            "isActive": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ice Cream with Serving Variations",
+      "description": "Ice cream parlor with different serving styles",
+      "request": {
+        "name": "Vanilla Ice Cream",
+        "code": "ICECREAM-001",
+        "description": "Premium vanilla ice cream",
+        "type": "final",
+        "ingredients": [
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12370",
+            "quantity": 100,
+            "unit": "g",
+            "nameSnapshot": "Vanilla Ice Cream Base"
+          }
+        ],
+        "yield": 1,
+        "variations": [
+          {
+            "name": "Cup",
+            "description": "Served in a cup",
+            "type": "style",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "Regular Cone",
+            "description": "Served in a regular cone",
+            "type": "style",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0.25,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12371",
+                "quantity": 1,
+                "unit": "pc",
+                "nameSnapshot": "Regular Cone"
+              }
+            ],
+            "isActive": true
+          },
+          {
+            "name": "Waffle Cone",
+            "description": "Served in a waffle cone",
+            "type": "style",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0.75,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12372",
+                "quantity": 1,
+                "unit": "pc",
+                "nameSnapshot": "Waffle Cone"
+              }
+            ],
+            "isActive": true
+          },
+          {
+            "name": "Sundae",
+            "description": "With toppings and whipped cream",
+            "type": "style",
+            "sizeMultiplier": 1.2,
+            "baseCostAdjustment": 1.50,
+            "ingredients": [
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12373",
+                "quantity": 30,
+                "unit": "ml",
+                "nameSnapshot": "Chocolate Sauce"
+              },
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12374",
+                "quantity": 20,
+                "unit": "g",
+                "nameSnapshot": "Whipped Cream"
+              },
+              {
+                "sourceType": "inventory",
+                "sourceId": "65a1234567890abcdef12375",
+                "quantity": 5,
+                "unit": "g",
+                "nameSnapshot": "Sprinkles"
+              }
+            ],
+            "isActive": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Cake with Size Variations",
+      "description": "Bakery with different cake sizes",
+      "request": {
+        "name": "Chocolate Cake",
+        "code": "CAKE-001",
+        "description": "Rich chocolate layer cake",
+        "type": "final",
+        "ingredients": [
+          {
+            "sourceType": "recipe",
+            "sourceId": "65a1234567890abcdef12380",
+            "quantity": 1,
+            "unit": "batch",
+            "nameSnapshot": "Chocolate Cake Batter"
+          },
+          {
+            "sourceType": "recipe",
+            "sourceId": "65a1234567890abcdef12381",
+            "quantity": 1,
+            "unit": "batch",
+            "nameSnapshot": "Chocolate Frosting"
+          }
+        ],
+        "yield": 1,
+        "variations": [
+          {
+            "name": "6-inch",
+            "description": "Serves 4-6 people",
+            "type": "size",
+            "sizeMultiplier": 0.5,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "8-inch",
+            "description": "Serves 8-10 people",
+            "type": "size",
+            "sizeMultiplier": 1,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "10-inch",
+            "description": "Serves 12-15 people",
+            "type": "size",
+            "sizeMultiplier": 1.5,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          },
+          {
+            "name": "12-inch",
+            "description": "Serves 20-25 people",
+            "type": "size",
+            "sizeMultiplier": 2.5,
+            "baseCostAdjustment": 0,
+            "isActive": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Recipe Only (No Variations)",
+      "description": "Simple recipe without any variations",
+      "request": {
+        "name": "Caesar Salad",
+        "code": "SALAD-001",
+        "description": "Classic Caesar salad with romaine lettuce and parmesan",
+        "type": "final",
+        "ingredients": [
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12390",
+            "quantity": 200,
+            "unit": "g",
+            "nameSnapshot": "Romaine Lettuce"
+          },
+          {
+            "sourceType": "recipe",
+            "sourceId": "65a1234567890abcdef12391",
+            "quantity": 1,
+            "unit": "portion",
+            "nameSnapshot": "Caesar Dressing"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12392",
+            "quantity": 30,
+            "unit": "g",
+            "nameSnapshot": "Parmesan Cheese"
+          },
+          {
+            "sourceType": "inventory",
+            "sourceId": "65a1234567890abcdef12393",
+            "quantity": 50,
+            "unit": "g",
+            "nameSnapshot": "Croutons"
+          }
+        ],
+        "yield": 1,
+        "isActive": true,
+        "variations": []
+      }
+    }
+  ]
+}
+

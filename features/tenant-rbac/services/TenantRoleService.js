@@ -6,14 +6,14 @@ const checkPerms = require('../../../middlewares/tenantCheckPermissions');
 
 const DEFAULT_PERMS = {
   owner:      ['*'],
-  admin:      ['dashboard.view','settings.manage','branches.manage','menu.*','inventory.*','orders.*','hr.*','reports.*','billing.*','pos.till.manage'],
-  manager:    ['dashboard.view','menu.*','inventory.*','orders.*','hr.*','reports.*','pos.till.manage'],
-  cashier:    ['orders.create','orders.read','orders.update','payments.take','customers.read','menu.items.read','pos.till.manage'],
-  kitchen:    ['kitchen.read','kitchen.update','orders.read'],
+  admin:      ['dashboard.view','settings.manage','branches.manage','menu.*','inventory.*','orders.*','hr.*','reports.*','billing.*','pos.*'],
+  manager:    ['dashboard.view','menu.*','inventory.*','orders.*','hr.*','reports.*','pos.*'],
+  cashier:    ['pos.orders.create','pos.orders.read','pos.orders.manage','pos.till.manage','pos.menu.read','payments.take','customers.read','menu.items.read'],
+  kitchen:    ['kitchen.read','kitchen.update','pos.orders.read'],
   inventory:  ['inventory.*','menu.read'],
   hr:         ['hr.*'],
-  accountant: ['reports.*','billing.*','orders.read'],
-  viewer:     ['dashboard.view','reports.view','menu.read','inventory.read','orders.read']
+  accountant: ['reports.*','billing.*','pos.orders.read'],
+  viewer:     ['dashboard.view','reports.view','menu.read','inventory.read','pos.orders.read']
 };
 
 // Track which tenants have had default roles seeded in the current process

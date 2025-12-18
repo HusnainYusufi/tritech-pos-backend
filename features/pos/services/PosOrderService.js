@@ -4,6 +4,7 @@
 const AppError = require('../../../modules/AppError');
 const logger = require('../../../modules/logger');
 const InventoryHooks = require('../../../modules/inventoryHooks');
+const { generateNextOrderNumber } = require('../../../modules/orderNumber');
 const BranchMenuRepo = require('../../branch-menu/repository/branchMenu.repository');
 const BranchRepo = require('../../branch/repository/branch.repository');
 const MenuItemRepo = require('../../menu/repository/menuItem.repository');
@@ -20,8 +21,11 @@ class PosOrderService {
       posId,
       tillSessionId,
       customerName,
+      customerPhone,
       notes,
       items = [],
+      paymentMethod = 'cash',
+      amountPaid = 0,
     } = payload || {};
 
     const uid = userContext?.uid;
@@ -65,46 +69,83 @@ class PosOrderService {
       }
     }
 
+    // Price items
     const pricedItems = await this._priceItems(conn, effectiveBranchId, items);
 
+    // Calculate totals
     const subTotal = pricedItems.reduce((acc, line) => acc + (line.lineTotal || 0), 0);
-    const taxTotal = 0; // tax engine TBD
-    const grandTotal = subTotal + taxTotal;
+    const taxRate = branchDoc.tax?.rate || 0;
+    const taxTotal = branchDoc.tax?.mode === 'exclusive' ? (subTotal * taxRate / 100) : 0;
+    const discount = 0; // TODO: Add discount logic
+    const grandTotal = subTotal + taxTotal - discount;
 
+    // Generate order number
+    const orderPrefix = branchDoc.posConfig?.orderPrefix || 'ORD';
+    const orderNumber = await generateNextOrderNumber(conn, effectiveBranchId, orderPrefix);
+
+    // Determine order status and payment
+    const isPaid = amountPaid >= grandTotal;
+    const orderStatus = isPaid ? 'paid' : 'placed';
+    const change = isPaid ? Math.max(0, amountPaid - grandTotal) : 0;
+
+    // Create order
     const orderDoc = await PosOrderRepo.create(conn, {
+      orderNumber,
       branchId: effectiveBranchId,
       posId: terminal?._id || posId || null,
       tillSessionId: normalizedTillSessionId,
       staffId: userDoc._id,
-      status: 'placed',
+      status: orderStatus,
       customerName: customerName || null,
+      customerPhone: customerPhone || null,
       notes: notes || null,
       items: pricedItems,
-      totals: { subTotal, taxTotal, grandTotal },
+      totals: { subTotal, taxTotal, discount, grandTotal },
+      payment: {
+        method: paymentMethod,
+        amountPaid: isPaid ? amountPaid : 0,
+        change,
+        paidAt: isPaid ? new Date() : null,
+      },
       pricingSnapshot: {
         currency: branchDoc.currency || 'SAR',
         priceIncludesTax: pricedItems.some((i) => i.priceIncludesTax),
-        taxMode: branchDoc.tax?.mode || null,
+        taxMode: branchDoc.tax?.mode || 'exclusive',
+        taxRate,
       },
       createdBy: uid,
     });
 
+    // Deduct inventory
     try {
       await InventoryHooks.deductStock(conn, tenantSlug, orderDoc);
     } catch (err) {
       logger.error('[PosOrderService] inventory deduction failed', err);
+      // Don't fail the order, just log the error
     }
+
+    logger.info('[PosOrderService] Order created successfully', {
+      orderNumber: orderDoc.orderNumber,
+      orderId: orderDoc._id,
+      branchId: effectiveBranchId,
+      staffId: uid,
+      grandTotal,
+      status: orderStatus
+    });
 
     return {
       status: 201,
-      message: 'Order placed',
+      message: isPaid ? 'Order placed and paid' : 'Order placed',
       result: {
         id: orderDoc._id,
+        orderNumber: orderDoc.orderNumber,
         status: orderDoc.status,
         totals: orderDoc.totals,
+        payment: orderDoc.payment,
         items: orderDoc.items,
         branchId: orderDoc.branchId,
         posId: orderDoc.posId,
+        createdAt: orderDoc.createdAt,
       },
     };
   }

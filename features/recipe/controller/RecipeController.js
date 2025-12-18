@@ -8,11 +8,82 @@ const validate = require('../../../middlewares/validate');
 const logger = require('../../../modules/logger');
 
 const svc = require('../services/recipe.service');
+const recipeWithVariantsSvc = require('../services/recipeWithVariants.service');
 const { createRecipe, updateRecipe } = require('../validation/recipe.validation');
+const { createRecipeWithVariants } = require('../validation/recipeWithVariants.validation');
 
 router.use(tenantContext);
 
-// Create
+/**
+ * 🚀 NEW: Create recipe with multiple variants atomically
+ * POST /t/recipes/with-variants
+ * 
+ * This is the production-grade endpoint for creating a recipe with all its
+ * variations in a single atomic transaction. If any part fails, everything
+ * rolls back.
+ * 
+ * @swagger
+ * /t/recipes/with-variants:
+ *   post:
+ *     summary: Create recipe with variants (atomic)
+ *     description: Creates a recipe and all its variants in a single transaction
+ *     tags: [Recipes]
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, ingredients]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Margherita Pizza"
+ *               ingredients:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *               variations:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                       example: "Large"
+ *                     sizeMultiplier:
+ *                       type: number
+ *                       example: 2
+ *     responses:
+ *       201:
+ *         description: Recipe and variants created successfully
+ *       400:
+ *         description: Validation error
+ *       409:
+ *         description: Recipe slug already exists
+ */
+router.post('/with-variants',
+  checkPerms(['recipes.manage']),
+  validate(createRecipeWithVariants),
+  async (req, res, next) => {
+    try {
+      const r = await recipeWithVariantsSvc.createWithVariants(req.tenantDb, req.body);
+      res.status(r.status).json(r);
+    } catch (e) { 
+      logger.error('[RecipeController] Create with variants failed', {
+        error: e.message,
+        tenant: req.tenantSlug,
+        recipeName: req.body?.name
+      });
+      next(e); 
+    }
+  }
+);
+
+// Create (standard - recipe only)
 router.post('/',
   checkPerms(['recipes.manage']),
   validate(createRecipe),
