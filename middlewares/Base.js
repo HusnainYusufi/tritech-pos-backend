@@ -51,8 +51,10 @@ class Base {
                 { url: "/t/auth/reset-password", methods: ['POST'] },
                 { url: "/t/auth/register-owner", methods: ['POST'] },
                 
-                // POS Terminal list - PUBLIC for cashier login screen
-                { url: "/t/pos/terminals", methods: ['GET'] },
+                // PUBLIC endpoints for cashier login screen
+                // Cashiers need to see branches and terminals BEFORE logging in
+                { url: "/t/branches", methods: ['GET'] },           // Branch list for dropdown
+                { url: "/t/pos/terminals", methods: ['GET'] },      // Terminal list for dropdown
 
 
 
