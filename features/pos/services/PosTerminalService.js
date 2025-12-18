@@ -44,7 +44,13 @@ class PosTerminalService {
 
   static async list(conn, userContext, query = {}) {
     const { branchId, status, page, limit } = query;
-    if (branchId && !hasTenantScope(userContext)) branchGuard(userContext, branchId);
+    
+    // Skip branch guard for public access (userContext is null for public endpoints)
+    // When authenticated, enforce branch access control
+    if (userContext && branchId && !hasTenantScope(userContext)) {
+      branchGuard(userContext, branchId);
+    }
+    
     const result = await PosTerminalRepo.search(conn, { branchId, status, page, limit });
     return { status: 200, message: 'OK', result };
   }
