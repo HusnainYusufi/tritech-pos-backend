@@ -50,6 +50,9 @@ class Base {
                 { url: "/t/auth/forgot-password", methods: ['POST'] },
                 { url: "/t/auth/reset-password", methods: ['POST'] },
                 { url: "/t/auth/register-owner", methods: ['POST'] },
+                
+                // POS Terminal list - PUBLIC for cashier login screen
+                { url: "/t/pos/terminals", methods: ['GET'] },
 
 
 

@@ -25,12 +25,14 @@ router.post('/terminals',
   }
 );
 
+// PUBLIC ENDPOINT - No authentication required
+// This is needed for the login screen to show available terminals
 router.get('/terminals',
-  checkPerms(['pos.read'], { any: true }),
+  // NO checkPerms - this is public for cashier login flow
   validate(listTerminals, 'query'),
   async (req, res, next) => {
     try {
-      const r = await PosTerminalService.list(req.tenantDb, req.user, req.query);
+      const r = await PosTerminalService.list(req.tenantDb, null, req.query);
       return res.status(r.status).json(r);
     } catch (e) { logger.error(e); next(e); }
   }
