@@ -2,6 +2,7 @@
 'use strict';
 
 const moment = require('moment');
+const PosOrderRepo = require('../features/pos/repository/posOrder.repository');
 
 /**
  * Generate unique order number with format: PREFIX-YYYYMMDD-NNNN
@@ -27,7 +28,8 @@ function generateOrderNumber(prefix = 'ORD', sequenceNumber = 1) {
  * @returns {Promise<number>} Next sequence number
  */
 async function getNextSequenceNumber(conn, branchId, prefix = 'ORD') {
-  const PosOrder = conn.models.PosOrder || conn.model('PosOrder');
+  // ✅ FIX: Use repository to get properly registered model
+  const PosOrder = PosOrderRepo.model(conn);
   
   const today = moment().startOf('day').toDate();
   const tomorrow = moment().add(1, 'day').startOf('day').toDate();
