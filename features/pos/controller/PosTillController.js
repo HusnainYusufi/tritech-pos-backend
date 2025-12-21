@@ -36,4 +36,25 @@ router.post('/till/close',
   }
 );
 
+/**
+ * Get Cashier Session Data
+ * GET /t/pos/till/session
+ * 
+ * Returns complete cashier session data from JWT token including:
+ * - User details
+ * - Till session info
+ * - Current balance
+ * - Session statistics
+ * - Terminal and branch info
+ */
+router.get('/till/session',
+  checkPerms(['pos.till.manage', 'pos.orders.read'], { any: true }),
+  async (req, res, next) => {
+    try {
+      const r = await PosTillService.getCashierSession(req.tenantDb, req.user);
+      return res.status(r.status).json(r);
+    } catch (e) { logger.error(e); next(e); }
+  }
+);
+
 module.exports = router;
