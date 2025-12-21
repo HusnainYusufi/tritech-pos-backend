@@ -1,7 +1,6 @@
 // features/recipe/services/recipeWithVariants.service.js
 'use strict';
 
-const mongoose = require('mongoose');
 const AppError = require('../../../modules/AppError');
 const logger = require('../../../modules/logger');
 const RecipeRepo = require('../repository/recipe.repository');
@@ -43,14 +42,14 @@ async function calculateRecipeCost(conn, ingredients) {
 
   for (const ing of ingredients) {
     let costPerUnit = ing.costPerUnit || 0;
-    let nameSnapshot = ing.nameSnapshot;
+    let nameSnapshot = ing.nameSnapshot || '';
     let unit = ing.unit;
 
     if (ing.sourceType === 'inventory') {
       const item = await ItemRepo.getById(conn, ing.sourceId);
       if (!item) {
         throw new AppError(
-          `Inventory item not found: ${nameSnapshot || ing.sourceId}`,
+          `Inventory item not found: ${ing.sourceId}`,
           404
         );
       }
@@ -73,7 +72,7 @@ async function calculateRecipeCost(conn, ingredients) {
       const rec = await RecipeRepo.getById(conn, ing.sourceId);
       if (!rec) {
         throw new AppError(
-          `Sub-recipe not found: ${nameSnapshot || ing.sourceId}`,
+          `Sub-recipe not found: ${ing.sourceId}`,
           404
         );
       }
@@ -107,14 +106,14 @@ async function calculateVariantCost(conn, variant) {
 
   for (const ing of (variant.ingredients || [])) {
     let costPerUnit = ing.costPerUnit || 0;
-    let nameSnapshot = ing.nameSnapshot;
+    let nameSnapshot = ing.nameSnapshot || '';
     let unit = ing.unit;
 
     if (ing.sourceType === 'inventory') {
       const item = await ItemRepo.getById(conn, ing.sourceId);
       if (!item) {
         throw new AppError(
-          `Inventory item not found for variant ingredient: ${nameSnapshot || ing.sourceId}`,
+          `Inventory item not found for variant ingredient: ${ing.sourceId}`,
           404
         );
       }
@@ -126,7 +125,7 @@ async function calculateVariantCost(conn, variant) {
       const rec = await RecipeRepo.getById(conn, ing.sourceId);
       if (!rec) {
         throw new AppError(
-          `Sub-recipe not found for variant ingredient: ${nameSnapshot || ing.sourceId}`,
+          `Sub-recipe not found for variant ingredient: ${ing.sourceId}`,
           404
         );
       }
@@ -162,31 +161,18 @@ function validateUniqueVariantNames(variants) {
 }
 
 /**
- * Production-grade service for creating recipe with multiple variants atomically
+ * Simple service for creating recipe with multiple variants
+ * NO TRANSACTIONS - follows existing pattern in recipe.service.js
  */
 class RecipeWithVariantsService {
   /**
-   * Create a recipe with multiple variants in a single atomic transaction
-   * 
-   * @param {Connection} conn - Tenant database connection
-   * @param {Object} data - Recipe and variants data
-   * @param {string} data.name - Recipe name
-   * @param {string} [data.customName] - Custom display name
-   * @param {string} [data.slug] - URL-friendly slug (auto-generated if not provided)
-   * @param {string} [data.code] - Recipe code/SKU
-   * @param {string} [data.description] - Recipe description
-   * @param {string} [data.type='final'] - Recipe type: 'sub' or 'final'
-   * @param {Array} data.ingredients - Array of ingredient objects
-   * @param {number} [data.yield=1] - Recipe yield quantity
-   * @param {boolean} [data.isActive=true] - Active status
-   * @param {Object} [data.metadata] - Additional metadata
-   * @param {Array} [data.variations=[]] - Array of variation objects
-   * 
-   * @returns {Promise<Object>} Result with recipe and created variants
+   * Create a recipe with multiple variants
+   * Uses the same pattern as existing recipe and variant services
    */
   static async createWithVariants(conn, data) {
     const startTime = Date.now();
-    let session = null;
+    let createdRecipe = null;
+    const createdVariants = [];
 
     try {
       // ========================================
@@ -231,7 +217,7 @@ class RecipeWithVariantsService {
 
       if (await detectCircular(conn, null, subRecipeIds)) {
         throw new AppError(
-          'Circular recipe dependency detected. A recipe cannot reference itself directly or indirectly.',
+          'Circular recipe dependency detected',
           400
         );
       }
@@ -245,68 +231,14 @@ class RecipeWithVariantsService {
         ingredientCount: data.ingredients.length 
       });
 
-      const { enriched: enrichedIngredients, total: recipeTotalCost } = 
+      const { enriched: enrichedIngredients, total: recipeTotalCost} = 
         await calculateRecipeCost(conn, data.ingredients);
 
       // ========================================
-      // STEP 4: PRE-CALCULATE ALL VARIANT COSTS
+      // STEP 4: CREATE BASE RECIPE
       // ========================================
       
-      const enrichedVariants = [];
-
-      if (variations.length > 0) {
-        logger.info('[RecipeWithVariants] Pre-calculating variant costs', { 
-          variantCount: variations.length 
-        });
-
-        for (const variant of variations) {
-          if (!variant.name || !variant.name.trim()) {
-            throw new AppError('Each variant must have a name', 400);
-          }
-
-          const { enriched: variantIngredients, total: variantCost } = 
-            await calculateVariantCost(conn, variant);
-
-          enrichedVariants.push({
-            name: String(variant.name).trim(),
-            description: variant.description || '',
-            type: variant.type || 'custom',
-            sizeMultiplier: Number(variant.sizeMultiplier || 1),
-            baseCostAdjustment: Number(variant.baseCostAdjustment || 0),
-            crustType: variant.crustType || '',
-            ingredients: variantIngredients,
-            totalCost: variantCost,
-            isActive: variant.isActive !== undefined ? !!variant.isActive : true,
-            metadata: variant.metadata || {}
-          });
-        }
-      }
-
-      // ========================================
-      // STEP 5: ENSURE MODELS ARE REGISTERED
-      // ========================================
-      
-      // Pre-register models on the connection before starting transaction
-      const Recipe = RecipeRepo.model(conn);
-      const RecipeVariant = RecipeVariantRepo.model(conn);
-
-      // ========================================
-      // STEP 6: START TRANSACTION
-      // ========================================
-      
-      session = await conn.startSession();
-      session.startTransaction();
-
-      logger.info('[RecipeWithVariants] Starting atomic transaction', {
-        recipeName: name,
-        variantCount: enrichedVariants.length
-      });
-
-      // ========================================
-      // STEP 7: CREATE BASE RECIPE
-      // ========================================
-      
-      const [recipeDoc] = await Recipe.create([{
+      createdRecipe = await RecipeRepo.create(conn, {
         name,
         customName: data.customName || '',
         slug,
@@ -318,84 +250,87 @@ class RecipeWithVariantsService {
         yield: Number(data.yield || 1),
         isActive: data.isActive !== undefined ? !!data.isActive : true,
         metadata: data.metadata || {},
-      }], { session });
+      });
 
       logger.info('[RecipeWithVariants] Base recipe created', {
-        recipeId: recipeDoc._id,
-        recipeName: recipeDoc.name,
-        totalCost: recipeDoc.totalCost
+        recipeId: createdRecipe._id,
+        recipeName: createdRecipe.name,
+        totalCost: createdRecipe.totalCost
       });
 
       // ========================================
-      // STEP 8: BULK CREATE VARIANTS
+      // STEP 5: CREATE VARIANTS (if any)
       // ========================================
       
-      let variantDocs = [];
+      if (variations.length > 0) {
+        logger.info('[RecipeWithVariants] Creating variants', { 
+          variantCount: variations.length 
+        });
 
-      if (enrichedVariants.length > 0) {
-        // Prepare bulk insert data
-        const variantInsertData = enrichedVariants.map(v => ({
-          recipeId: recipeDoc._id,
-          name: v.name,
-          description: v.description,
-          type: v.type,
-          sizeMultiplier: v.sizeMultiplier,
-          baseCostAdjustment: v.baseCostAdjustment,
-          crustType: v.crustType,
-          ingredients: v.ingredients,
-          totalCost: v.totalCost,
-          isActive: v.isActive,
-          metadata: v.metadata
-        }));
+        for (const variant of variations) {
+          if (!variant.name || !variant.name.trim()) {
+            throw new AppError('Each variant must have a name', 400);
+          }
 
-        // Bulk insert all variants
-        variantDocs = await RecipeVariant.create(variantInsertData, { session });
+          const { enriched: variantIngredients, total: variantCost } = 
+            await calculateVariantCost(conn, variant);
+
+          const variantDoc = await RecipeVariantRepo.create(conn, {
+            recipeId: createdRecipe._id,
+            name: String(variant.name).trim(),
+            description: variant.description || '',
+            type: variant.type || 'custom',
+            sizeMultiplier: Number(variant.sizeMultiplier || 1),
+            baseCostAdjustment: Number(variant.baseCostAdjustment || 0),
+            crustType: variant.crustType || '',
+            ingredients: variantIngredients,
+            totalCost: variantCost,
+            isActive: variant.isActive !== undefined ? !!variant.isActive : true,
+            metadata: variant.metadata || {}
+          });
+
+          createdVariants.push(variantDoc);
+        }
 
         logger.info('[RecipeWithVariants] Variants created', {
-          recipeId: recipeDoc._id,
-          variantCount: variantDocs.length
+          recipeId: createdRecipe._id,
+          variantCount: createdVariants.length
         });
       }
 
       // ========================================
-      // STEP 9: COMMIT TRANSACTION
+      // STEP 6: RETURN RESULT
       // ========================================
       
-      await session.commitTransaction();
-      
       const duration = Date.now() - startTime;
-      logger.info('[RecipeWithVariants] Transaction committed successfully', {
-        recipeId: recipeDoc._id,
-        recipeName: recipeDoc.name,
-        variantCount: variantDocs.length,
+      logger.info('[RecipeWithVariants] Recipe and variants created successfully', {
+        recipeId: createdRecipe._id,
+        recipeName: createdRecipe.name,
+        variantCount: createdVariants.length,
         durationMs: duration
       });
 
-      // ========================================
-      // STEP 10: RETURN RESULT
-      // ========================================
-      
       return {
         status: 201,
-        message: `Recipe created successfully with ${variantDocs.length} variant(s)`,
+        message: `Recipe created successfully with ${createdVariants.length} variant(s)`,
         result: {
           recipe: {
-            _id: recipeDoc._id,
-            name: recipeDoc.name,
-            customName: recipeDoc.customName,
-            slug: recipeDoc.slug,
-            code: recipeDoc.code,
-            description: recipeDoc.description,
-            type: recipeDoc.type,
-            ingredients: recipeDoc.ingredients,
-            totalCost: recipeDoc.totalCost,
-            yield: recipeDoc.yield,
-            isActive: recipeDoc.isActive,
-            metadata: recipeDoc.metadata,
-            createdAt: recipeDoc.createdAt,
-            updatedAt: recipeDoc.updatedAt
+            _id: createdRecipe._id,
+            name: createdRecipe.name,
+            customName: createdRecipe.customName,
+            slug: createdRecipe.slug,
+            code: createdRecipe.code,
+            description: createdRecipe.description,
+            type: createdRecipe.type,
+            ingredients: createdRecipe.ingredients,
+            totalCost: createdRecipe.totalCost,
+            yield: createdRecipe.yield,
+            isActive: createdRecipe.isActive,
+            metadata: createdRecipe.metadata,
+            createdAt: createdRecipe.createdAt,
+            updatedAt: createdRecipe.updatedAt
           },
-          variants: variantDocs.map(v => ({
+          variants: createdVariants.map(v => ({
             _id: v._id,
             recipeId: v.recipeId,
             name: v.name,
@@ -412,12 +347,12 @@ class RecipeWithVariantsService {
             updatedAt: v.updatedAt
           })),
           summary: {
-            recipeId: recipeDoc._id,
-            recipeName: recipeDoc.name,
-            recipeSlug: recipeDoc.slug,
-            recipeCost: recipeDoc.totalCost,
-            variantCount: variantDocs.length,
-            totalIngredients: recipeDoc.ingredients.length,
+            recipeId: createdRecipe._id,
+            recipeName: createdRecipe.name,
+            recipeSlug: createdRecipe.slug,
+            recipeCost: createdRecipe.totalCost,
+            variantCount: createdVariants.length,
+            totalIngredients: createdRecipe.ingredients.length,
             processingTimeMs: duration
           }
         }
@@ -425,14 +360,17 @@ class RecipeWithVariantsService {
 
     } catch (error) {
       // ========================================
-      // ERROR HANDLING & ROLLBACK
+      // ERROR HANDLING & CLEANUP
       // ========================================
       
-      if (session && session.inTransaction()) {
-        await session.abortTransaction();
-        logger.error('[RecipeWithVariants] Transaction aborted due to error', {
-          error: error.message,
-          stack: error.stack
+      // If recipe was created but variants failed, log it
+      if (createdRecipe && createdVariants.length < (data.variations || []).length) {
+        logger.warn('[RecipeWithVariants] Recipe created but some variants failed', {
+          recipeId: createdRecipe._id,
+          recipeName: createdRecipe.name,
+          expectedVariants: (data.variations || []).length,
+          createdVariants: createdVariants.length,
+          error: error.message
         });
       }
 
@@ -459,7 +397,7 @@ class RecipeWithVariantsService {
         );
       }
 
-      // Generic error - log detailed information for debugging
+      // Generic error
       logger.error('[RecipeWithVariants] Unexpected error', {
         error: error.message,
         stack: error.stack,
@@ -473,15 +411,6 @@ class RecipeWithVariantsService {
         `Failed to create recipe with variants: ${error.message}`,
         500
       );
-
-    } finally {
-      // ========================================
-      // CLEANUP
-      // ========================================
-      
-      if (session) {
-        await session.endSession();
-      }
     }
   }
 }
