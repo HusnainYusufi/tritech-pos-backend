@@ -271,8 +271,46 @@ class PosTillService {
     let terminal = null;
     let branch = null;
 
+    // First, try to get till session from token
     if (userContext.tillSessionId) {
+      logger.debug('Checking till session from token', { tillSessionId: userContext.tillSessionId });
       tillSession = await TillSessionRepo.findOpenById(conn, userContext.tillSessionId);
+      if (tillSession) {
+        logger.info('Till session found from token', { tillSessionId: tillSession._id.toString() });
+      }
+    }
+
+    // If not found in token, check database for existing open session
+    // This is critical for session recovery after page refresh
+    if (!tillSession && userContext.branchId && userContext.posId) {
+      logger.info('Checking database for open till session', {
+        staffId: uid,
+        branchId: userContext.branchId,
+        posId: userContext.posId
+      });
+      
+      tillSession = await TillSessionRepo.findOpenByStaffBranchPos(
+        conn,
+        uid,
+        userContext.branchId,
+        userContext.posId
+      );
+      
+      if (tillSession) {
+        logger.info('Till session found in database - session recovered', {
+          staffId: uid,
+          tillSessionId: tillSession._id.toString(),
+          openingAmount: tillSession.openingAmount,
+          branchId: userContext.branchId,
+          posId: userContext.posId
+        });
+      } else {
+        logger.warn('No till session found in database', {
+          staffId: uid,
+          branchId: userContext.branchId,
+          posId: userContext.posId
+        });
+      }
     }
 
     // Get terminal details (from token or till session)
