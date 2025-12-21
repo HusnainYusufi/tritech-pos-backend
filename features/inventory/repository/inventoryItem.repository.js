@@ -71,6 +71,9 @@ class InventoryItemRepository {
   static async create(conn, d) { return InventoryItem(conn).create(d); }
   static async updateById(conn, id, d) { return InventoryItem(conn).findByIdAndUpdate(id, d, { new: true }); }
   static async getById(conn, id) {
+    // ✅ Ensure InventoryCategory is registered before populate
+    getTenantModel(conn, 'InventoryCategory', inventoryCategorySchema, 'inventory_categories');
+    
     // ✅ populate category for single-item fetch too
     return InventoryItem(conn)
       .findById(id)
