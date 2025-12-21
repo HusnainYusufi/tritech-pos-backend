@@ -13,7 +13,7 @@ try {
   const { Base } = require('./middlewares/Base');
   const logger = require('./modules/logger');
   const swaggerUi = require('swagger-ui-express');
-  const swaggerSpec = require('./swagger-output.json');
+  const swaggerSpec = require('./config/swagger.config');
 
 
 
@@ -33,12 +33,25 @@ try {
   if (!notFound) throw new TypeError('notFound export is invalid');
 
   const app = express();
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  
+  // Swagger UI configuration
+  const swaggerUiOptions = {
     explorer: true,
-  }));
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Tritech POS API Documentation',
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      filter: true,
+      tryItOutEnabled: true
+    }
+  };
 
-  // Raw JSON spec
-  app.get('/api-docs.json', (req, res) => {
+  // Serve Swagger documentation at /api/docs
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
+  // Raw JSON spec endpoint
+  app.get('/api/docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
   });
