@@ -7,7 +7,7 @@ const logger = require('../../../modules/logger');
 const TenantUserRepo = require('../repository/tenantUser.repository');
 const TillSessionRepo = require('../repository/tillSession.repository');
 const { sendEmail } = require('../../../modules/helper');
-const { hasTenantScope, branchGuard } = require('./tenantGuards');
+const { hasTenantScope, branchGuard, posGuard } = require('./tenantGuards');
 const PosTerminalService = require('../../pos/services/PosTerminalService');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
@@ -74,6 +74,10 @@ class TenantAuthService {
     let terminal = null;
     if (posId) {
       if (!normalizedBranchId) throw new AppError('branchId is required when specifying posId', 400);
+      
+      // Validate POS terminal access (Option 3: Hybrid approach)
+      posGuard(userDoc, posId);
+      
       terminal = await PosTerminalService.getActiveInBranch(conn, normalizedBranchId, posId);
     }
 
@@ -136,6 +140,11 @@ class TenantAuthService {
     }
 
     if (!effectiveBranch) throw new AppError('branchId is required for branch-scoped staff', 400);
+
+    // Validate POS terminal access (Option 3: Hybrid approach)
+    // If posIds is empty, cashier can use any POS in their branch
+    // If posIds has values, cashier is restricted to those specific POS terminals
+    posGuard(userDoc, posId);
 
     const terminal = await PosTerminalService.getActiveInBranch(conn, effectiveBranch, posId);
 
