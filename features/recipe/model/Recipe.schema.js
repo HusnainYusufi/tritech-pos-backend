@@ -9,7 +9,7 @@ module.exports = (Schema) => {
       trim: true,
     },
     sourceId: { type: Schema.Types.ObjectId, required: true, index: true },
-    nameSnapshot: { type: String, required: true, trim: true },
+    nameSnapshot: { type: String, required: false, trim: true, default: '' },
     quantity: { type: Number, required: true, min: 0 },
     unit: { type: String, required: true, trim: true },
     costPerUnit: { type: Number, default: 0 },
