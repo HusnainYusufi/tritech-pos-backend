@@ -283,7 +283,15 @@ class RecipeWithVariantsService {
       }
 
       // ========================================
-      // STEP 5: START TRANSACTION
+      // STEP 5: ENSURE MODELS ARE REGISTERED
+      // ========================================
+      
+      // Pre-register models on the connection before starting transaction
+      const Recipe = RecipeRepo.model(conn);
+      const RecipeVariant = RecipeVariantRepo.model(conn);
+
+      // ========================================
+      // STEP 6: START TRANSACTION
       // ========================================
       
       session = await conn.startSession();
@@ -295,10 +303,9 @@ class RecipeWithVariantsService {
       });
 
       // ========================================
-      // STEP 6: CREATE BASE RECIPE
+      // STEP 7: CREATE BASE RECIPE
       // ========================================
       
-      const Recipe = RecipeRepo.model(conn);
       const [recipeDoc] = await Recipe.create([{
         name,
         customName: data.customName || '',
@@ -320,14 +327,12 @@ class RecipeWithVariantsService {
       });
 
       // ========================================
-      // STEP 7: BULK CREATE VARIANTS
+      // STEP 8: BULK CREATE VARIANTS
       // ========================================
       
       let variantDocs = [];
 
       if (enrichedVariants.length > 0) {
-        const RecipeVariant = RecipeVariantRepo.model(conn);
-        
         // Prepare bulk insert data
         const variantInsertData = enrichedVariants.map(v => ({
           recipeId: recipeDoc._id,
@@ -353,7 +358,7 @@ class RecipeWithVariantsService {
       }
 
       // ========================================
-      // STEP 8: COMMIT TRANSACTION
+      // STEP 9: COMMIT TRANSACTION
       // ========================================
       
       await session.commitTransaction();
@@ -367,7 +372,7 @@ class RecipeWithVariantsService {
       });
 
       // ========================================
-      // STEP 9: RETURN RESULT
+      // STEP 10: RETURN RESULT
       // ========================================
       
       return {
@@ -454,14 +459,18 @@ class RecipeWithVariantsService {
         );
       }
 
-      // Generic error
+      // Generic error - log detailed information for debugging
       logger.error('[RecipeWithVariants] Unexpected error', {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        errorName: error.name,
+        errorCode: error.code,
+        recipeName: data?.name,
+        variantCount: data?.variations?.length || 0
       });
 
       throw new AppError(
-        'Failed to create recipe with variants. Please try again.',
+        `Failed to create recipe with variants: ${error.message}`,
         500
       );
 
