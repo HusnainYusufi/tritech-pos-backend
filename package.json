@@ -5,9 +5,12 @@
   "main": "app.js",
   "scripts": {
     "dev": "node app.js",
+    "start": "node app.js",
     "typecheck": "tsc --pretty",
     "lint": "eslint . --ext .js,.ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "swagger:generate": "node swagger-gen.js",
+    "swagger:serve": "node app.js"
   },
   "dependencies": {
     "-": "^0.0.1",
