@@ -28,6 +28,7 @@ module.exports.routes = (app) => {
   app.use('/t/menu/categories', require('../features/menu/controller/MenuCategoryController'));
   app.use('/t/menu/items', require('../features/menu/controller/MenuItemController'));
   app.use('/t/menu/variations', require('../features/menu/controller/MenuVariationController'));
+  app.use('/t/addons', require('../features/addons/controller/AddOnsController'));
   app.use('/t/branch-menu' , require('../features/branch-menu/controller/BranchMenuController'));
   app.use('/t/branch-inventory' , require('../features/branch-inventory/controller/BranchInventoryController'));
   app.use('/t/staff', require('../features/staff/controller/StaffController'));
