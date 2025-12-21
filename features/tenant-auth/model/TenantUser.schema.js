@@ -15,6 +15,7 @@ module.exports = (Schema) => {
     }],
 
     branchIds: { type: [Schema.Types.ObjectId], default: [] }, // optional legacy field
+    posIds: { type: [Schema.Types.ObjectId], ref: 'PosTerminal', default: [] }, // optional POS restrictions
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, default: false },
 

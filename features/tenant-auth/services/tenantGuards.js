@@ -21,4 +21,22 @@ const branchGuard = (userDoc, branchId) => {
   return true;
 };
 
-module.exports = { hasTenantScope, branchGuard };
+const posGuard = (userDoc, posId) => {
+  // If no user provided (public endpoint), skip guard
+  if (!userDoc) return true;
+  
+  // If no posId to check or user has tenant scope, allow
+  if (!posId || hasTenantScope(userDoc)) return true;
+  
+  // If user has no POS restrictions (posIds is empty), allow any POS in their branch
+  const assignedPosIds = (userDoc.posIds || []).map(String);
+  if (assignedPosIds.length === 0) return true;
+  
+  // User has specific POS restrictions - check if this POS is allowed
+  if (!assignedPosIds.includes(String(posId))) {
+    throw new AppError('You are not assigned to this POS terminal', 403);
+  }
+  return true;
+};
+
+module.exports = { hasTenantScope, branchGuard, posGuard };

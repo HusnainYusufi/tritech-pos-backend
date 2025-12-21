@@ -7,7 +7,7 @@ const TenantAuthService = require('../../tenant-auth/services/TenantAuthService'
 const TenantUserRepo = require('../../tenant-auth/repository/tenantUser.repository');
 const TillSessionRepo = require('../../tenant-auth/repository/tillSession.repository');
 const PosTerminalService = require('./PosTerminalService');
-const { hasTenantScope, branchGuard } = require('../../tenant-auth/services/tenantGuards');
+const { hasTenantScope, branchGuard, posGuard } = require('../../tenant-auth/services/tenantGuards');
 
 class PosTillService {
   static async openTill(conn, userContext, { branchId, posId, openingAmount, cashCounts, notes }) {
@@ -31,6 +31,9 @@ class PosTillService {
       }
     }
     if (!effectiveBranch) throw new AppError('branchId is required to open a till session', 400);
+
+    // Validate POS terminal access
+    posGuard(userDoc, posId);
 
     const terminal = await PosTerminalService.getActiveInBranch(conn, effectiveBranch, posId);
 
