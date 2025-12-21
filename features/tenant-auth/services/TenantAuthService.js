@@ -80,6 +80,38 @@ class TenantAuthService {
     userDoc.lastLoginAt = new Date();
     await userDoc.save();
 
+    // Check for existing open till session for this user/POS/branch
+    // This ensures session recovery after page refresh or re-login
+    let existingTillSession = null;
+    if (posId && normalizedBranchId && userDoc.isStaff) {
+      try {
+        existingTillSession = await TillSessionRepo.findOpenByStaffBranchPos(
+          conn,
+          userDoc._id,
+          normalizedBranchId,
+          posId
+        );
+        
+        if (existingTillSession) {
+          logger.info('Existing till session found on login - session recovered', {
+            staffId: userDoc._id.toString(),
+            tillSessionId: existingTillSession._id.toString(),
+            branchId: normalizedBranchId,
+            posId: posId
+          });
+        }
+      } catch (err) {
+        // No open session found - this is expected for new logins
+        logger.debug('No existing till session found on login', { 
+          staffId: userDoc._id.toString(), 
+          branchId: normalizedBranchId, 
+          posId: posId,
+          error: err.message
+        });
+        existingTillSession = null;
+      }
+    }
+
     const token = this.signToken({
       tenant: true,
       uid: userDoc._id.toString(),
@@ -89,11 +121,33 @@ class TenantAuthService {
       branchId: normalizedBranchId || null,
       posId: posId || null,
       posName: terminal?.name || null,
-      defaultBranchId: defaultBranchId || normalizedBranchId || null
+      defaultBranchId: defaultBranchId || normalizedBranchId || null,
+      tillSessionId: existingTillSession?._id?.toString() || null
     });
 
-    return { status: 200, message: 'Login successful', result: { token,
-      user: { _id: userDoc._id, fullName: userDoc.fullName, email: userDoc.email, roles: userDoc.roles, branchIds: userDoc.branchIds } } };
+    return { 
+      status: 200, 
+      message: 'Login successful', 
+      result: { 
+        token,
+        user: { 
+          _id: userDoc._id, 
+          fullName: userDoc.fullName, 
+          email: userDoc.email, 
+          roles: userDoc.roles, 
+          branchIds: userDoc.branchIds 
+        },
+        tillSessionId: existingTillSession?._id?.toString() || null,
+        tillSession: existingTillSession ? {
+          _id: existingTillSession._id,
+          openingAmount: existingTillSession.openingAmount,
+          openedAt: existingTillSession.openedAt,
+          status: existingTillSession.status,
+          branchId: existingTillSession.branchId,
+          posId: existingTillSession.posId
+        } : null
+      } 
+    };
   }
 
   static async loginWithPin(conn, { pin, branchId, posId, defaultBranchId }) {
@@ -145,6 +199,36 @@ class TenantAuthService {
     userDoc.lastLoginAt = now;
     await userDoc.save();
 
+    // Check for existing open till session for this cashier/POS/branch
+    // This ensures session recovery after page refresh or re-login
+    let existingTillSession = null;
+    try {
+      existingTillSession = await TillSessionRepo.findOpenByStaffBranchPos(
+        conn,
+        userDoc._id,
+        effectiveBranch,
+        posId
+      );
+      
+      if (existingTillSession) {
+        logger.info('Existing till session found on login - session recovered', {
+          staffId: userDoc._id.toString(),
+          tillSessionId: existingTillSession._id.toString(),
+          branchId: effectiveBranch,
+          posId: posId
+        });
+      }
+    } catch (err) {
+      // No open session found - this is expected for new logins
+      logger.debug('No existing till session found on login', { 
+        staffId: userDoc._id.toString(), 
+        branchId: effectiveBranch, 
+        posId: posId,
+        error: err.message
+      });
+      existingTillSession = null;
+    }
+
     const token = this.signToken({
       tenant: true,
       uid: userDoc._id.toString(),
@@ -155,7 +239,7 @@ class TenantAuthService {
       posId: posId || null,
       posName: terminal?.name || null,
       defaultBranchId: defaultBranchId || effectiveBranch || null,
-      tillSessionId: null
+      tillSessionId: existingTillSession?._id?.toString() || null
     });
 
     return {
@@ -165,7 +249,15 @@ class TenantAuthService {
         token,
         user: sanitizeUser(userDoc),
         branchId: effectiveBranch || null,
-        tillSessionId: null
+        tillSessionId: existingTillSession?._id?.toString() || null,
+        tillSession: existingTillSession ? {
+          _id: existingTillSession._id,
+          openingAmount: existingTillSession.openingAmount,
+          openedAt: existingTillSession.openedAt,
+          status: existingTillSession.status,
+          branchId: existingTillSession.branchId,
+          posId: existingTillSession.posId
+        } : null
       }
     };
   }
