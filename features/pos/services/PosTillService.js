@@ -180,14 +180,81 @@ class PosTillService {
   }
 
   /**
+   * Calculate order statistics using efficient aggregation
+   * @private
+   */
+  static async _calculateOrderStats(conn, filter, tillSession = null) {
+    const PosOrderRepo = require('../repository/posOrder.repository');
+    const PosOrder = PosOrderRepo.model(conn);
+
+    // Use aggregation for efficient calculation
+    const stats = await PosOrder.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalSales: { $sum: '$totals.grandTotal' },
+          totalCash: {
+            $sum: {
+              $cond: [{ $eq: ['$payment.method', 'cash'] }, '$payment.amountPaid', 0]
+            }
+          },
+          totalCard: {
+            $sum: {
+              $cond: [{ $eq: ['$payment.method', 'card'] }, '$payment.amountPaid', 0]
+            }
+          },
+          totalMobile: {
+            $sum: {
+              $cond: [{ $eq: ['$payment.method', 'mobile'] }, '$payment.amountPaid', 0]
+            }
+          }
+        }
+      }
+    ]);
+
+    const result = stats[0] || {
+      totalOrders: 0,
+      totalSales: 0,
+      totalCash: 0,
+      totalCard: 0,
+      totalMobile: 0
+    };
+
+    // Calculate balances
+    const openingAmount = tillSession?.openingAmount || 0;
+    const currentBalance = openingAmount + result.totalCash;
+    const sessionDuration = tillSession 
+      ? Math.floor((Date.now() - new Date(tillSession.openedAt).getTime()) / 1000 / 60)
+      : null;
+
+    return {
+      totalOrders: result.totalOrders,
+      totalSales: Number.parseFloat((result.totalSales || 0).toFixed(2)),
+      totalCash: Number.parseFloat((result.totalCash || 0).toFixed(2)),
+      totalCard: Number.parseFloat((result.totalCard || 0).toFixed(2)),
+      totalMobile: Number.parseFloat((result.totalMobile || 0).toFixed(2)),
+      currentBalance: Number.parseFloat(currentBalance.toFixed(2)),
+      expectedBalance: Number.parseFloat(currentBalance.toFixed(2)),
+      openingAmount: openingAmount,
+      sessionDuration: sessionDuration,
+      scope: tillSession ? 'session' : 'today'
+    };
+  }
+
+  /**
    * Get cashier session data from token
    * Returns complete cashier info, till session, and calculated balances
+   * 
+   * Stats are ALWAYS provided:
+   * - If till session is open: stats for that session
+   * - If no till session: stats for today's orders by this cashier
    */
   static async getCashierSession(conn, userContext) {
     const uid = userContext?.uid;
     if (!uid) throw new AppError('Unauthorized', 401);
 
-    const PosOrderRepo = require('../repository/posOrder.repository');
     const BranchRepo = require('../../branch/repository/branch.repository');
 
     // Get user details
@@ -203,63 +270,68 @@ class PosTillService {
     let tillSession = null;
     let terminal = null;
     let branch = null;
-    let sessionStats = null;
 
     if (userContext.tillSessionId) {
       tillSession = await TillSessionRepo.findOpenById(conn, userContext.tillSessionId);
-      
-      if (tillSession) {
-        // Get terminal details
-        if (tillSession.posId) {
-          terminal = await PosTerminalService.getActiveInBranch(
-            conn, 
-            tillSession.branchId, 
-            tillSession.posId
-          );
-        }
+    }
 
-        // Get branch details
-        if (tillSession.branchId) {
-          branch = await BranchRepo.model(conn)
-            .findById(tillSession.branchId)
-            .select('name code address')
-            .lean();
-        }
+    // Get terminal details (from token or till session)
+    const effectivePosId = userContext.posId || tillSession?.posId;
+    const effectiveBranchId = userContext.branchId || tillSession?.branchId;
 
-        // Calculate session statistics
-        const PosOrder = PosOrderRepo.model(conn);
-        const sessionOrders = await PosOrder.find({
-          tillSessionId: tillSession._id,
-          status: { $in: ['placed', 'paid'] }
-        }).lean();
-
-        const totalSales = sessionOrders.reduce((sum, order) => sum + (order.totals?.grandTotal || 0), 0);
-        const totalCash = sessionOrders
-          .filter(o => o.payment?.method === 'cash')
-          .reduce((sum, order) => sum + (order.payment?.amountPaid || 0), 0);
-        const totalCard = sessionOrders
-          .filter(o => o.payment?.method === 'card')
-          .reduce((sum, order) => sum + (order.payment?.amountPaid || 0), 0);
-        const totalMobile = sessionOrders
-          .filter(o => o.payment?.method === 'mobile')
-          .reduce((sum, order) => sum + (order.payment?.amountPaid || 0), 0);
-
-        const currentBalance = tillSession.openingAmount + totalCash;
-        const expectedBalance = tillSession.openingAmount + totalCash;
-
-        sessionStats = {
-          totalOrders: sessionOrders.length,
-          totalSales: parseFloat(totalSales.toFixed(2)),
-          totalCash: parseFloat(totalCash.toFixed(2)),
-          totalCard: parseFloat(totalCard.toFixed(2)),
-          totalMobile: parseFloat(totalMobile.toFixed(2)),
-          currentBalance: parseFloat(currentBalance.toFixed(2)),
-          expectedBalance: parseFloat(expectedBalance.toFixed(2)),
-          openingAmount: tillSession.openingAmount,
-          sessionDuration: Math.floor((Date.now() - new Date(tillSession.openedAt).getTime()) / 1000 / 60) // minutes
-        };
+    if (effectivePosId && effectiveBranchId) {
+      try {
+        terminal = await PosTerminalService.getActiveInBranch(
+          conn, 
+          effectiveBranchId, 
+          effectivePosId
+        );
+      } catch (err) {
+        // Terminal not found or inactive - log and continue without terminal data
+        logger.warn('Terminal not found or inactive', { 
+          posId: effectivePosId, 
+          branchId: effectiveBranchId,
+          error: err.message 
+        });
+        terminal = null;
       }
     }
+
+    // Get branch details
+    if (effectiveBranchId) {
+      branch = await BranchRepo.model(conn)
+        .findById(effectiveBranchId)
+        .select('name code address')
+        .lean();
+    }
+
+    // Calculate statistics
+    // Strategy: If till session exists, show session stats. Otherwise, show today's stats for this cashier.
+    let statsFilter;
+    if (tillSession) {
+      // Till session open: show session-specific stats
+      statsFilter = {
+        tillSessionId: tillSession._id,
+        status: { $in: ['placed', 'paid'] }
+      };
+    } else {
+      // No till session: show today's orders for this cashier
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      
+      statsFilter = {
+        staffId: uid,
+        status: { $in: ['placed', 'paid'] },
+        createdAt: { $gte: todayStart }
+      };
+
+      // If cashier is branch-scoped, filter by their branch
+      if (effectiveBranchId) {
+        statsFilter.branchId = effectiveBranchId;
+      }
+    }
+
+    const sessionStats = await this._calculateOrderStats(conn, statsFilter, tillSession);
 
     return {
       status: 200,
@@ -276,9 +348,9 @@ class PosTillService {
           status: userDoc.status
         },
         session: {
-          branchId: userContext.branchId,
-          posId: userContext.posId,
-          posName: userContext.posName,
+          branchId: effectiveBranchId || null,
+          posId: effectivePosId || null,
+          posName: userContext.posName || null,
           tillSessionId: userContext.tillSessionId || null,
           hasTillSession: !!tillSession
         },
