@@ -1,0 +1,305 @@
+{
+  "info": {
+    "name": "Cashier Session API",
+    "description": "Get complete cashier session data from JWT token",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3003",
+      "type": "string"
+    },
+    {
+      "key": "tenant_id",
+      "value": "extraction-testt",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pos_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Login with PIN",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('token', response.result.token);",
+              "    console.log('✅ Token saved:', response.result.token.substring(0, 20) + '...');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenant_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pin\": \"1234\",\n  \"branchId\": \"{{branch_id}}\",\n  \"posId\": \"{{pos_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/auth/login-pin",
+          "host": ["{{base_url}}"],
+          "path": ["t", "auth", "login-pin"]
+        },
+        "description": "Login as cashier with PIN. Token is automatically saved to collection variables."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get Cashier Session (No Till)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenant_id}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/t/pos/till/session",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "till", "session"]
+        },
+        "description": "Get cashier session data before opening till. Should show hasTillSession: false"
+      },
+      "response": [
+        {
+          "name": "Success - No Till Session",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/till/session",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "till", "session"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"status\": 200,\n  \"message\": \"OK\",\n  \"result\": {\n    \"user\": {\n      \"_id\": \"65c1234567890abcdef12345\",\n      \"fullName\": \"John Doe\",\n      \"email\": \"john@example.com\",\n      \"roles\": [\"cashier\"],\n      \"isStaff\": true,\n      \"position\": \"Cashier\",\n      \"branchIds\": [\"65a1234567890abcdef12345\"],\n      \"status\": \"active\"\n    },\n    \"session\": {\n      \"branchId\": \"65a1234567890abcdef12345\",\n      \"posId\": null,\n      \"posName\": null,\n      \"tillSessionId\": null,\n      \"hasTillSession\": false\n    },\n    \"tillSession\": null,\n    \"terminal\": null,\n    \"branch\": null,\n    \"stats\": null\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Open Till Session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('token', response.result.token);",
+              "    console.log('✅ New token saved with tillSessionId');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenant_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"posId\": \"{{pos_id}}\",\n  \"openingAmount\": 100.00,\n  \"notes\": \"Testing cashier session endpoint\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/pos/till/open",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "till", "open"]
+        },
+        "description": "Open till session. New token with tillSessionId is automatically saved."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Get Cashier Session (With Till)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenant_id}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/t/pos/till/session",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "till", "session"]
+        },
+        "description": "Get complete cashier session data with till session open. Shows user, till, stats, terminal, and branch info."
+      },
+      "response": [
+        {
+          "name": "Success - With Till Session",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/till/session",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "till", "session"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"status\": 200,\n  \"message\": \"OK\",\n  \"result\": {\n    \"user\": {\n      \"_id\": \"65c1234567890abcdef12345\",\n      \"fullName\": \"John Doe\",\n      \"email\": \"john@example.com\",\n      \"roles\": [\"cashier\"],\n      \"isStaff\": true,\n      \"position\": \"Cashier\",\n      \"branchIds\": [\"65a1234567890abcdef12345\"],\n      \"status\": \"active\"\n    },\n    \"session\": {\n      \"branchId\": \"65a1234567890abcdef12345\",\n      \"posId\": \"65b1234567890abcdef12345\",\n      \"posName\": \"POS Terminal 1\",\n      \"tillSessionId\": \"65d1234567890abcdef12345\",\n      \"hasTillSession\": true\n    },\n    \"tillSession\": {\n      \"_id\": \"65d1234567890abcdef12345\",\n      \"status\": \"open\",\n      \"openingAmount\": 100,\n      \"openedAt\": \"2024-01-15T10:00:00.000Z\",\n      \"cashCounts\": null,\n      \"notes\": \"Testing cashier session endpoint\"\n    },\n    \"terminal\": {\n      \"_id\": \"65b1234567890abcdef12345\",\n      \"name\": \"POS Terminal 1\",\n      \"code\": \"POS-001\",\n      \"status\": \"active\"\n    },\n    \"branch\": {\n      \"_id\": \"65a1234567890abcdef12345\",\n      \"name\": \"Main Branch\",\n      \"code\": \"BR-001\",\n      \"address\": \"123 Main St\"\n    },\n    \"stats\": {\n      \"totalOrders\": 0,\n      \"totalSales\": 0,\n      \"totalCash\": 0,\n      \"totalCard\": 0,\n      \"totalMobile\": 0,\n      \"currentBalance\": 100,\n      \"expectedBalance\": 100,\n      \"openingAmount\": 100,\n      \"sessionDuration\": 2\n    }\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "5. Create Order (Cash)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenant_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"menuItemId\": \"PUT_MENU_ITEM_ID_HERE\",\n      \"quantity\": 2,\n      \"notes\": \"Extra sauce\"\n    }\n  ],\n  \"branchId\": \"{{branch_id}}\",\n  \"customerName\": \"Walk-in Customer\",\n  \"paymentMethod\": \"cash\",\n  \"amountPaid\": 50.00\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/t/pos/orders",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "orders"]
+        },
+        "description": "Create a cash order to update session statistics"
+      },
+      "response": []
+    },
+    {
+      "name": "6. Get Session (After Orders)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenant_id}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/t/pos/till/session",
+          "host": ["{{base_url}}"],
+          "path": ["t", "pos", "till", "session"]
+        },
+        "description": "Get session data after creating orders. Stats should show updated totals and balance."
+      },
+      "response": [
+        {
+          "name": "Success - With Orders",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/till/session",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "till", "session"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"status\": 200,\n  \"message\": \"OK\",\n  \"result\": {\n    \"user\": {\n      \"_id\": \"65c1234567890abcdef12345\",\n      \"fullName\": \"John Doe\",\n      \"email\": \"john@example.com\",\n      \"roles\": [\"cashier\"],\n      \"isStaff\": true,\n      \"position\": \"Cashier\",\n      \"branchIds\": [\"65a1234567890abcdef12345\"],\n      \"status\": \"active\"\n    },\n    \"session\": {\n      \"branchId\": \"65a1234567890abcdef12345\",\n      \"posId\": \"65b1234567890abcdef12345\",\n      \"posName\": \"POS Terminal 1\",\n      \"tillSessionId\": \"65d1234567890abcdef12345\",\n      \"hasTillSession\": true\n    },\n    \"tillSession\": {\n      \"_id\": \"65d1234567890abcdef12345\",\n      \"status\": \"open\",\n      \"openingAmount\": 100,\n      \"openedAt\": \"2024-01-15T10:00:00.000Z\",\n      \"cashCounts\": null,\n      \"notes\": \"Testing cashier session endpoint\"\n    },\n    \"terminal\": {\n      \"_id\": \"65b1234567890abcdef12345\",\n      \"name\": \"POS Terminal 1\",\n      \"code\": \"POS-001\",\n      \"status\": \"active\"\n    },\n    \"branch\": {\n      \"_id\": \"65a1234567890abcdef12345\",\n      \"name\": \"Main Branch\",\n      \"code\": \"BR-001\",\n      \"address\": \"123 Main St\"\n    },\n    \"stats\": {\n      \"totalOrders\": 3,\n      \"totalSales\": 150.50,\n      \"totalCash\": 100.00,\n      \"totalCard\": 50.50,\n      \"totalMobile\": 0,\n      \"currentBalance\": 200,\n      \"expectedBalance\": 200,\n      \"openingAmount\": 100,\n      \"sessionDuration\": 45\n    }\n  }\n}"
+        }
+      ]
+    }
+  ]
+}
