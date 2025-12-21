@@ -5,7 +5,7 @@ const router = express.Router();
 const tenantContext = require('../../../middlewares/tenantContext');
 const checkPerms = require('../../../middlewares/tenantCheckPermissions');
 const validate = require('../../../middlewares/validate');
-const logger = require('../../../middlewares/logger');
+const logger = require('../../../modules/logger');
 
 const svc = require('../services/menuVariation.service');
 const { createMenuVariation, updateMenuVariation } = require('../validation/menuVariation.validation');
