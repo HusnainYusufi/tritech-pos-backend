@@ -12,7 +12,73 @@ const { createBranch, updateBranch, updateSettings, branchUser } = require('../v
 
 router.use(tenantContext);
 
-// Create
+/**
+ * @swagger
+ * /t/branches:
+ *   post:
+ *     tags:
+ *       - Branches
+ *     summary: Create a new branch
+ *     description: Create a new branch location for the tenant
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - code
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Main Branch
+ *               code:
+ *                 type: string
+ *                 example: MAIN01
+ *               address:
+ *                 type: string
+ *                 example: 123 Main St, City, Country
+ *               phone:
+ *                 type: string
+ *                 example: +1234567890
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: main@restaurant.com
+ *               isDefault:
+ *                 type: boolean
+ *                 example: true
+ *     responses:
+ *       201:
+ *         description: Branch created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 201
+ *                 message:
+ *                   type: string
+ *                   example: Branch created successfully
+ *                 data:
+ *                   $ref: '#/components/schemas/Branch'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.post('/',
   checkPerms(['branches.manage']),
   validate(createBranch),
@@ -24,12 +90,46 @@ router.post('/',
   }
 );
 
-// List branches
-// PUBLIC ENDPOINT - No authentication required
-// This is needed for the cashier login screen to show available branches
+/**
+ * @swagger
+ * /t/branches:
+ *   get:
+ *     tags:
+ *       - Branches
+ *     summary: Get all branches (PUBLIC)
+ *     description: Retrieve list of all branches. This is a PUBLIC endpoint used for cashier login screen.
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - $ref: '#/components/parameters/page'
+ *       - $ref: '#/components/parameters/limit'
+ *       - name: status
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive]
+ *         description: Filter by branch status
+ *     responses:
+ *       200:
+ *         description: Branches retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Branches retrieved successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Branch'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.get('/',
-  // NO checkPerms - this is public for cashier login flow
-  // Cashiers need to select their branch BEFORE logging in
   async (req, res, next) => {
     try {
       const r = await svc.list(req.tenantDb, req.query);
@@ -38,7 +138,47 @@ router.get('/',
   }
 );
 
-// Get one
+/**
+ * @swagger
+ * /t/branches/{id}:
+ *   get:
+ *     tags:
+ *       - Branches
+ *     summary: Get branch by ID
+ *     description: Retrieve detailed information about a specific branch
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     responses:
+ *       200:
+ *         description: Branch retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   $ref: '#/components/schemas/Branch'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.get('/:id',
   checkPerms(['branches.read'], { any: true }),
   async (req, res, next) => {
@@ -49,7 +189,57 @@ router.get('/:id',
   }
 );
 
-// Update
+/**
+ * @swagger
+ * /t/branches/{id}:
+ *   put:
+ *     tags:
+ *       - Branches
+ *     summary: Update branch
+ *     description: Update branch information
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive]
+ *     responses:
+ *       200:
+ *         description: Branch updated successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.put('/:id',
   checkPerms(['branches.manage']),
   validate(updateBranch),
@@ -61,7 +251,37 @@ router.put('/:id',
   }
 );
 
-// Delete
+/**
+ * @swagger
+ * /t/branches/{id}:
+ *   delete:
+ *     tags:
+ *       - Branches
+ *     summary: Delete branch
+ *     description: Delete a branch location
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     responses:
+ *       200:
+ *         description: Branch deleted successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.delete('/:id',
   checkPerms(['branches.manage']),
   async (req, res, next) => {
@@ -72,7 +292,37 @@ router.delete('/:id',
   }
 );
 
-// Set default
+/**
+ * @swagger
+ * /t/branches/{id}/set-default:
+ *   post:
+ *     tags:
+ *       - Branches
+ *     summary: Set branch as default
+ *     description: Set a branch as the default branch for the tenant
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     responses:
+ *       200:
+ *         description: Default branch set successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.post('/:id/set-default',
   checkPerms(['branches.manage']),
   async (req, res, next) => {
@@ -83,7 +333,37 @@ router.post('/:id/set-default',
   }
 );
 
-// Settings (GET)
+/**
+ * @swagger
+ * /t/branches/{branchId}/settings:
+ *   get:
+ *     tags:
+ *       - Branches
+ *     summary: Get branch settings
+ *     description: Retrieve configuration settings for a branch
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: branchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     responses:
+ *       200:
+ *         description: Settings retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.get('/:branchId/settings',
   checkPerms(['branches.read'], { any: true, branchParam: 'branchId' }),
   async (req, res, next) => {
@@ -94,7 +374,55 @@ router.get('/:branchId/settings',
   }
 );
 
-// Settings (PUT)
+/**
+ * @swagger
+ * /t/branches/{branchId}/settings:
+ *   put:
+ *     tags:
+ *       - Branches
+ *     summary: Update branch settings
+ *     description: Update configuration settings for a branch
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: branchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               taxRate:
+ *                 type: number
+ *                 example: 0.15
+ *               currency:
+ *                 type: string
+ *                 example: USD
+ *               timezone:
+ *                 type: string
+ *                 example: America/New_York
+ *     responses:
+ *       200:
+ *         description: Settings updated successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.put('/:branchId/settings',
   checkPerms(['branches.manage'], { branchParam: 'branchId' }),
   validate(updateSettings),
@@ -106,7 +434,51 @@ router.put('/:branchId/settings',
   }
 );
 
-// Attach user to branchIds (optional convenience)
+/**
+ * @swagger
+ * /t/branches/{branchId}/attach-user:
+ *   post:
+ *     tags:
+ *       - Branches
+ *     summary: Attach user to branch
+ *     description: Assign a user to a branch
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: branchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 example: user_1234567890
+ *     responses:
+ *       200:
+ *         description: User attached to branch successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.post('/:branchId/attach-user',
   checkPerms(['branches.manage'], { branchParam: 'branchId' }),
   validate(branchUser),
@@ -118,6 +490,51 @@ router.post('/:branchId/attach-user',
   }
 );
 
+/**
+ * @swagger
+ * /t/branches/{branchId}/detach-user:
+ *   post:
+ *     tags:
+ *       - Branches
+ *     summary: Detach user from branch
+ *     description: Remove a user from a branch
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: branchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 example: user_1234567890
+ *     responses:
+ *       200:
+ *         description: User detached from branch successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.post('/:branchId/detach-user',
   checkPerms(['branches.manage'], { branchParam: 'branchId' }),
   validate(branchUser),
@@ -129,7 +546,57 @@ router.post('/:branchId/detach-user',
   }
 );
 
-// Summary (for dashboard cards)
+/**
+ * @swagger
+ * /t/branches/{branchId}/summary:
+ *   get:
+ *     tags:
+ *       - Branches
+ *     summary: Get branch summary
+ *     description: Retrieve summary statistics for a branch (for dashboard)
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: branchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     responses:
+ *       200:
+ *         description: Summary retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalOrders:
+ *                       type: integer
+ *                       example: 150
+ *                     totalRevenue:
+ *                       type: number
+ *                       example: 5000.00
+ *                     activeStaff:
+ *                       type: integer
+ *                       example: 12
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
 router.get('/:branchId/summary',
   checkPerms(['branches.read'], { any: true, branchParam: 'branchId' }),
   async (req, res, next) => {
