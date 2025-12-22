@@ -2,21 +2,62 @@ const AppError = require('../../../modules/AppError');
 const ItemRepo = require('../repository/inventoryItem.repository');
 const CategoryRepo = require('../../inventory-category/repository/inventoryCategory.repository');
 const { nextSku } = require('../../../modules/sku');
+const mongoose = require('mongoose');
 
 class InventoryItemService {
   static async create(conn, tenantSlug, d) {
   if (!d.name) throw new AppError('name required', 400);
 
-  let categoryNameSnapshot = '';
-  if (d.categoryId) {
-    const cat = await CategoryRepo.getById(conn, d.categoryId);
-    if (!cat) throw new AppError('Category not found', 404);
-    categoryNameSnapshot = cat.name;
+  // Validate tenantSlug is provided
+  if (!tenantSlug || typeof tenantSlug !== 'string' || tenantSlug.trim() === '') {
+    throw new AppError('tenantSlug is required', 400);
   }
 
-  const sku = d.sku && d.sku.trim()
-    ? d.sku.trim()
-    : await nextSku(conn, tenantSlug);
+  let categoryNameSnapshot = '';
+  if (d.categoryId) {
+    // Validate ObjectId format before querying to avoid CastError
+    if (!mongoose.Types.ObjectId.isValid(d.categoryId)) {
+      throw new AppError('Invalid categoryId format', 400);
+    }
+    try {
+      const cat = await CategoryRepo.getById(conn, d.categoryId);
+      if (!cat) throw new AppError('Category not found', 404);
+      categoryNameSnapshot = cat.name;
+    } catch (error) {
+      // Handle Mongoose CastError or other database errors
+      if (error.name === 'CastError' || error.message?.includes('Cast to ObjectId')) {
+        throw new AppError('Invalid categoryId format', 400);
+      }
+      // Re-throw AppError as-is, otherwise wrap unexpected errors
+      if (error instanceof AppError) throw error;
+      throw new AppError('Category lookup failed', 500);
+    }
+  }
+
+  let sku;
+  if (d.sku && d.sku.trim()) {
+    sku = d.sku.trim();
+  } else {
+    try {
+      sku = await nextSku(conn, tenantSlug);
+    } catch (error) {
+      // Handle counter-related errors with helpful messages
+      if (error.code === 11000 || error.message?.includes('duplicate key')) {
+        const logger = require('../../../modules/logger');
+        logger.error('[InventoryItemService] Counter duplicate key error', {
+          tenantSlug,
+          error: error.message,
+          stack: error.stack
+        });
+        throw new AppError(
+          'SKU generation failed due to counter conflict. Please run the fix script: node scripts/fix-counters-collection.js ' + tenantSlug,
+          500
+        );
+      }
+      // Re-throw other errors
+      throw error;
+    }
+  }
 
   // enforce unique sku (rare race can be caught by unique index)
   const dup = await ItemRepo.getBySku(conn, sku);
@@ -67,9 +108,23 @@ class InventoryItemService {
         upd.categoryId = null;
         upd.categoryNameSnapshot = '';
       } else {
-        const cat = await CategoryRepo.getById(conn, patch.categoryId);
-        if (!cat) throw new AppError('Category not found', 404);
-        upd.categoryNameSnapshot = cat.name;
+        // Validate ObjectId format before querying to avoid CastError
+        if (!mongoose.Types.ObjectId.isValid(patch.categoryId)) {
+          throw new AppError('Invalid categoryId format', 400);
+        }
+        try {
+          const cat = await CategoryRepo.getById(conn, patch.categoryId);
+          if (!cat) throw new AppError('Category not found', 404);
+          upd.categoryNameSnapshot = cat.name;
+        } catch (error) {
+          // Handle Mongoose CastError or other database errors
+          if (error.name === 'CastError' || error.message?.includes('Cast to ObjectId')) {
+            throw new AppError('Invalid categoryId format', 400);
+          }
+          // Re-throw AppError as-is, otherwise wrap unexpected errors
+          if (error instanceof AppError) throw error;
+          throw new AppError('Category lookup failed', 500);
+        }
       }
     }
 
