@@ -4,6 +4,7 @@
 const mongoose = require('mongoose');
 const logger = require('./logger');
 const { withAuthSource } = require('./mongoUri');
+const { ensureCountersIndex } = require('./counterIndexMaintenance');
 
 const connectionCache = {}; // slug -> mongoose.Connection
 
@@ -39,12 +40,7 @@ async function getTenantConnection(tenantSlug, dbUri) {
       normalizedUri: normalizedUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@')
     });
 
-    const conn = await mongoose.createConnection(normalizedUri, {
-      // modern options no longer required in latest mongoose,
-      // but harmless if you're on older versions:
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    const conn = await mongoose.createConnection(normalizedUri, {});
 
     conn.on('error', (err) => {
       logger.error(`[connectionManager] Mongo error [${tenantSlug}]`, { 
@@ -56,6 +52,8 @@ async function getTenantConnection(tenantSlug, dbUri) {
     conn.once('open', () => {
       logger.info(`[connectionManager] Tenant DB ready [${tenantSlug}]`);
     });
+
+    await ensureCountersIndex(conn, tenantSlug);
 
     connectionCache[tenantSlug] = conn;
     logger.info(`[connectionManager] Connection cached: ${tenantSlug}`);
