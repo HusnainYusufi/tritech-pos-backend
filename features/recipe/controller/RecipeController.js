@@ -25,9 +25,21 @@ router.use(tenantContext);
  * @swagger
  * /t/recipes/with-variants:
  *   post:
- *     summary: Create recipe with variants (atomic)
- *     description: Creates a recipe and all its variants in a single transaction
- *     tags: [Recipes]
+ *     tags:
+ *       - Recipes
+ *     summary: Create recipe with variants (atomic transaction)
+ *     description: |
+ *       ✅ **Production-Grade Endpoint** - Creates a recipe and all its variants in a single atomic transaction.
+ *       
+ *       **Key Features:**
+ *       - All-or-nothing: If any variant fails, entire transaction rolls back
+ *       - Automatic cost calculation for base recipe and all variants
+ *       - Circular dependency detection
+ *       - Unit consistency validation
+ *       
+ *       **Production URL:** https://api.tritechtechnologyllc.com
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
  *     security:
  *       - bearerAuth: []
  *       - tenantHeader: []
@@ -37,33 +49,170 @@ router.use(tenantContext);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name, ingredients]
+ *             required:
+ *               - name
+ *               - ingredients
  *             properties:
  *               name:
  *                 type: string
- *                 example: "Margherita Pizza"
+ *                 description: Recipe name
+ *                 example: "Pizza Base"
+ *                 maxLength: 160
+ *               slug:
+ *                 type: string
+ *                 description: URL-friendly identifier (auto-generated if not provided)
+ *                 example: "pizza-base"
+ *               description:
+ *                 type: string
+ *                 description: Recipe description
+ *                 example: "Base pizza recipe with dough, sauce, and cheese"
+ *               type:
+ *                 type: string
+ *                 enum: [sub, final]
+ *                 description: Recipe type (sub = used in other recipes, final = standalone)
+ *                 default: final
  *               ingredients:
  *                 type: array
+ *                 description: Base recipe ingredients
+ *                 minItems: 1
  *                 items:
  *                   type: object
+ *                   required:
+ *                     - sourceType
+ *                     - sourceId
+ *                     - quantity
+ *                     - unit
+ *                   properties:
+ *                     sourceType:
+ *                       type: string
+ *                       enum: [inventory, recipe]
+ *                       example: inventory
+ *                     sourceId:
+ *                       type: string
+ *                       description: Inventory item ID or sub-recipe ID
+ *                       example: "507f1f77bcf86cd799439011"
+ *                     quantity:
+ *                       type: number
+ *                       minimum: 0
+ *                       example: 200
+ *                     unit:
+ *                       type: string
+ *                       example: "g"
  *               variations:
  *                 type: array
+ *                 description: Recipe variants (sizes, flavors, etc.)
  *                 items:
  *                   type: object
+ *                   required:
+ *                     - name
  *                   properties:
  *                     name:
  *                       type: string
+ *                       description: Variant name (must be unique per recipe)
  *                       example: "Large"
+ *                       maxLength: 160
+ *                     type:
+ *                       type: string
+ *                       enum: [size, flavor, crust, style, custom]
+ *                       default: custom
+ *                       example: size
  *                     sizeMultiplier:
  *                       type: number
- *                       example: 2
+ *                       description: Ingredient quantity multiplier (for size variations)
+ *                       minimum: 0.01
+ *                       maximum: 10
+ *                       example: 1.5
+ *                     baseCostAdjustment:
+ *                       type: number
+ *                       description: Fixed cost adjustment (+/-)
+ *                       example: 0
+ *                     ingredients:
+ *                       type: array
+ *                       description: Additional ingredients for this variant
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           sourceType:
+ *                             type: string
+ *                             enum: [inventory, recipe]
+ *                           sourceId:
+ *                             type: string
+ *                           quantity:
+ *                             type: number
+ *                           unit:
+ *                             type: string
+ *                     description:
+ *                       type: string
+ *                       example: "Large size (14 inch)"
+ *                     isActive:
+ *                       type: boolean
+ *                       default: true
+ *           examples:
+ *             pizzaWithSizes:
+ *               summary: Pizza with size variations
+ *               value:
+ *                 name: "Pizza Base"
+ *                 ingredients:
+ *                   - sourceType: "inventory"
+ *                     sourceId: "dough_id"
+ *                     quantity: 200
+ *                     unit: "g"
+ *                   - sourceType: "inventory"
+ *                     sourceId: "cheese_id"
+ *                     quantity: 100
+ *                     unit: "g"
+ *                 variations:
+ *                   - name: "Small"
+ *                     type: "size"
+ *                     sizeMultiplier: 0.75
+ *                   - name: "Medium"
+ *                     type: "size"
+ *                     sizeMultiplier: 1.0
+ *                   - name: "Large"
+ *                     type: "size"
+ *                     sizeMultiplier: 1.5
  *     responses:
  *       201:
- *         description: Recipe and variants created successfully
+ *         description: Recipe and variants created successfully in single transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 201
+ *                 message:
+ *                   type: string
+ *                   example: "Recipe created successfully with 3 variant(s)"
+ *                 result:
+ *                   type: object
+ *                   properties:
+ *                     recipe:
+ *                       $ref: '#/components/schemas/Recipe'
+ *                     variants:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           recipeId:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                           sizeMultiplier:
+ *                             type: number
+ *                           totalCost:
+ *                             type: number
  *       400:
- *         description: Validation error
+ *         $ref: '#/components/responses/ValidationError'
  *       409:
  *         description: Recipe slug already exists
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.post('/with-variants',
   checkPerms(['recipes.manage']),

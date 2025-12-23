@@ -15,6 +15,10 @@ const options = {
         url: process.env.SWAGGER_SERVER_URL || 'http://localhost:3000',
         description: 'Local dev server',
       },
+      {
+        url: process.env.PRODUCTION_URL || 'https://api.tritechtechnologyllc.com',
+        description: 'Production server',
+      },
     ],
     components: {
       securitySchemes: {

@@ -45,7 +45,7 @@ const options = {
         description: 'Development server'
       },
       {
-        url: process.env.PRODUCTION_URL || 'https://api.tritechpos.com',
+        url: process.env.PRODUCTION_URL || 'https://api.tritechtechnologyllc.com',
         description: 'Production server'
       }
     ],
@@ -296,8 +296,82 @@ const options = {
             }
           }
         },
+        MenuVariation: {
+          type: 'object',
+          description: 'Menu variation with recipe variant linking (v2.0)',
+          properties: {
+            _id: {
+              type: 'string',
+              example: '507f1f77bcf86cd799439011'
+            },
+            menuItemId: {
+              type: 'string',
+              description: 'Menu item this variation belongs to',
+              example: '507f1f77bcf86cd799439022'
+            },
+            recipeVariantId: {
+              type: 'string',
+              description: '✅ NEW v2.0: Linked recipe variant for cost calculation',
+              example: '507f1f77bcf86cd799439033',
+              nullable: true
+            },
+            name: {
+              type: 'string',
+              description: 'Variation name (unique per menu item)',
+              example: 'Large',
+              maxLength: 160
+            },
+            type: {
+              type: 'string',
+              enum: ['size', 'crust', 'flavor', 'addon', 'combo', 'custom'],
+              description: 'Type of variation',
+              example: 'size'
+            },
+            priceDelta: {
+              type: 'number',
+              description: 'Price adjustment from base price',
+              example: 5.00
+            },
+            calculatedCost: {
+              type: 'number',
+              description: '✅ NEW v2.0: Auto-calculated cost for profit tracking',
+              example: 4.50
+            },
+            sizeMultiplier: {
+              type: 'number',
+              description: 'Ingredient quantity multiplier (for size variations)',
+              example: 1.5,
+              minimum: 0.01,
+              maximum: 10
+            },
+            isDefault: {
+              type: 'boolean',
+              description: 'Default variation selection',
+              example: false
+            },
+            isActive: {
+              type: 'boolean',
+              description: 'Variation availability',
+              example: true
+            },
+            displayOrder: {
+              type: 'number',
+              description: 'Display order in menu',
+              example: 1
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time'
+            }
+          }
+        },
         PosOrder: {
           type: 'object',
+          description: 'POS order with variation support (v2.0)',
           properties: {
             orderId: {
               type: 'string',
@@ -309,45 +383,135 @@ const options = {
             },
             items: {
               type: 'array',
+              description: 'Order items with selected variations',
               items: {
                 type: 'object',
                 properties: {
                   menuItemId: {
-                    type: 'string'
+                    type: 'string',
+                    description: 'Menu item ID'
+                  },
+                  recipeIdSnapshot: {
+                    type: 'string',
+                    description: 'Recipe ID snapshot at time of order'
+                  },
+                  selectedVariations: {
+                    type: 'array',
+                    description: '✅ NEW v2.0: Selected variations with full details',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        menuVariationId: {
+                          type: 'string',
+                          description: 'Menu variation ID'
+                        },
+                        recipeVariantId: {
+                          type: 'string',
+                          description: 'Linked recipe variant ID',
+                          nullable: true
+                        },
+                        nameSnapshot: {
+                          type: 'string',
+                          description: 'Variation name at time of order',
+                          example: 'Large'
+                        },
+                        type: {
+                          type: 'string',
+                          enum: ['size', 'crust', 'flavor', 'addon', 'combo', 'custom'],
+                          example: 'size'
+                        },
+                        priceDelta: {
+                          type: 'number',
+                          description: 'Price adjustment applied',
+                          example: 5.00
+                        },
+                        sizeMultiplier: {
+                          type: 'number',
+                          description: 'Size multiplier for inventory',
+                          example: 1.5
+                        },
+                        calculatedCost: {
+                          type: 'number',
+                          description: 'Cost for this variation',
+                          example: 4.50
+                        }
+                      }
+                    }
+                  },
+                  nameSnapshot: {
+                    type: 'string',
+                    description: 'Menu item name at time of order'
                   },
                   quantity: {
-                    type: 'number'
+                    type: 'number',
+                    description: 'Quantity ordered',
+                    minimum: 1
                   },
-                  price: {
-                    type: 'number'
+                  unitPrice: {
+                    type: 'number',
+                    description: 'Unit price (base + variations)',
+                    example: 17.00
                   },
-                  subtotal: {
-                    type: 'number'
+                  lineTotal: {
+                    type: 'number',
+                    description: 'Total for this line item',
+                    example: 34.00
+                  },
+                  calculatedCost: {
+                    type: 'number',
+                    description: '✅ NEW v2.0: Total cost for profit tracking',
+                    example: 12.00
+                  },
+                  priceIncludesTax: {
+                    type: 'boolean',
+                    description: 'Whether price includes tax'
+                  },
+                  notes: {
+                    type: 'string',
+                    description: 'Special instructions',
+                    maxLength: 500
                   }
                 }
               }
             },
-            subtotal: {
-              type: 'number',
-              example: 25.98
-            },
-            tax: {
-              type: 'number',
-              example: 2.6
-            },
-            total: {
-              type: 'number',
-              example: 28.58
+            totals: {
+              type: 'object',
+              properties: {
+                subTotal: {
+                  type: 'number',
+                  example: 34.00
+                },
+                taxTotal: {
+                  type: 'number',
+                  example: 3.40
+                },
+                discount: {
+                  type: 'number',
+                  example: 0
+                },
+                grandTotal: {
+                  type: 'number',
+                  example: 37.40
+                }
+              }
             },
             status: {
               type: 'string',
-              enum: ['pending', 'preparing', 'ready', 'completed', 'cancelled'],
-              example: 'pending'
+              enum: ['placed', 'paid', 'void', 'refunded'],
+              example: 'paid'
             },
             paymentMethod: {
               type: 'string',
-              enum: ['cash', 'card', 'digital'],
+              enum: ['cash', 'card', 'mobile', 'split'],
               example: 'card'
+            },
+            branchId: {
+              type: 'string',
+              description: 'Branch where order was placed'
+            },
+            staffId: {
+              type: 'string',
+              description: 'Staff member who created the order'
             },
             createdAt: {
               type: 'string',
