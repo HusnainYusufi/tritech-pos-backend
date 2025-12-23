@@ -65,29 +65,39 @@ router.use(tenantContext);
  *                 example: session_1234567890
  *               items:
  *                 type: array
+ *                 description: Order items with optional variations
  *                 items:
  *                   type: object
  *                   required:
  *                     - menuItemId
  *                     - quantity
- *                     - price
  *                   properties:
  *                     menuItemId:
  *                       type: string
- *                       example: item_1234567890
- *                     quantity:
- *                       type: number
- *                       example: 2
- *                     price:
- *                       type: number
- *                       example: 12.99
+ *                       description: Menu item ID
+ *                       example: 507f1f77bcf86cd799439011
  *                     variations:
  *                       type: array
+ *                       description: |
+ *                         **NEW in v2.0**: Array of menu variation IDs (size, flavors, add-ons)
+ *                         
+ *                         System will automatically:
+ *                         - Calculate correct price with variation deltas
+ *                         - Deduct proper inventory quantities
+ *                         - Track actual costs for profit margins
  *                       items:
- *                         type: object
+ *                         type: string
+ *                       example: ["507f1f77bcf86cd799439022", "507f1f77bcf86cd799439033"]
+ *                     quantity:
+ *                       type: number
+ *                       description: Quantity to order
+ *                       example: 2
+ *                       minimum: 1
  *                     notes:
  *                       type: string
- *                       example: No onions
+ *                       description: Special instructions
+ *                       example: No onions, extra cheese
+ *                       maxLength: 500
  *               subtotal:
  *                 type: number
  *                 example: 25.98
@@ -110,6 +120,31 @@ router.use(tenantContext);
  *               customerPhone:
  *                 type: string
  *                 example: +1234567890
+ *           examples:
+ *             orderWithVariations:
+ *               summary: Order with size and flavor variations
+ *               value:
+ *                 branchId: 507f1f77bcf86cd799439011
+ *                 items:
+ *                   - menuItemId: 507f1f77bcf86cd799439022
+ *                     variations:
+ *                       - 507f1f77bcf86cd799439033
+ *                       - 507f1f77bcf86cd799439044
+ *                     quantity: 2
+ *                     notes: Extra cheese
+ *                   - menuItemId: 507f1f77bcf86cd799439055
+ *                     quantity: 1
+ *                 paymentMethod: card
+ *                 customerName: John Doe
+ *                 customerPhone: +1234567890
+ *             simpleOrder:
+ *               summary: Simple order without variations
+ *               value:
+ *                 branchId: 507f1f77bcf86cd799439011
+ *                 items:
+ *                   - menuItemId: 507f1f77bcf86cd799439022
+ *                     quantity: 1
+ *                 paymentMethod: cash
  *     responses:
  *       201:
  *         description: Order created successfully

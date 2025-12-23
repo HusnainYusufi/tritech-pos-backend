@@ -9,6 +9,13 @@ const orderItem = Joi.object({
       'any.required': 'Menu item ID is required',
       'string.empty': 'Menu item ID cannot be empty'
     }),
+  
+  // ✅ NEW: Support for menu variations (size, flavors, add-ons)
+  variations: Joi.array().items(Joi.string()).optional()
+    .messages({
+      'array.base': 'Variations must be an array of variation IDs'
+    }),
+  
   quantity: Joi.number().integer().min(1).required()
     .messages({
       'any.required': 'Quantity is required',

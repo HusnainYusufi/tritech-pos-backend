@@ -150,8 +150,21 @@ class PosOrderService {
     };
   }
 
+  /**
+   * Price order items with variation support
+   * 
+   * ✅ PRODUCTION FIX: Now properly handles variations for accurate pricing and cost tracking
+   * 
+   * @param {Object} conn - Tenant database connection
+   * @param {String} branchId - Branch ID
+   * @param {Array} items - Order items with optional variations
+   * @returns {Promise<Array>} Priced items with variations
+   */
   static async _priceItems(conn, branchId, items) {
     if (!items || !items.length) throw new AppError('Order must include at least one item', 400);
+
+    const MenuVariationRepo = require('../../menu/repository/menuVariation.repository');
+    const MenuCostCalculator = require('../../menu/services/menuCostCalculator.service');
 
     const menuItemIds = items.map((i) => i.menuItemId);
     const menuItems = await MenuItemRepo.findByIds(conn, menuItemIds);
@@ -160,31 +173,87 @@ class PosOrderService {
     const configs = await BranchMenuRepo.listByBranchAndMenuItemIds(conn, branchId, menuItemIds);
     const configMap = new Map(configs.map((c) => [String(c.menuItemId), c]));
 
-    return items.map((rawItem) => {
+    const pricedItems = [];
+
+    for (const rawItem of items) {
       const menuItem = menuMap.get(String(rawItem.menuItemId));
       if (!menuItem || menuItem.isDeleted || menuItem.isArchived || !menuItem.isActive) {
-        throw new AppError('Menu item not available for sale', 404);
+        throw new AppError(`Menu item not available for sale: ${rawItem.menuItemId}`, 404);
       }
 
       const config = configMap.get(String(rawItem.menuItemId));
+      let unitPrice = (config?.sellingPrice ?? menuItem.pricing?.basePrice ?? 0);
+      
+      // ✅ CRITICAL FIX: Process selected variations
+      const selectedVariations = [];
+      if (rawItem.variations && Array.isArray(rawItem.variations) && rawItem.variations.length > 0) {
+        // Load variation details
+        const variations = await MenuVariationRepo.model(conn)
+          .find({ _id: { $in: rawItem.variations } })
+          .lean();
 
-      const unitPrice = (config?.sellingPrice ?? menuItem.pricing?.basePrice ?? 0);
+        for (const variation of variations) {
+          // Validate variation belongs to this menu item
+          if (String(variation.menuItemId) !== String(rawItem.menuItemId)) {
+            throw new AppError(
+              `Variation "${variation.name}" does not belong to menu item`,
+              400
+            );
+          }
+
+          // Add price delta
+          unitPrice += (variation.priceDelta || 0);
+
+          // Capture variation details for order
+          selectedVariations.push({
+            menuVariationId: variation._id,
+            recipeVariantId: variation.recipeVariantId || null,
+            nameSnapshot: variation.name,
+            type: variation.type,
+            priceDelta: variation.priceDelta || 0,
+            sizeMultiplier: variation.sizeMultiplier || 1,
+            calculatedCost: variation.calculatedCost || 0
+          });
+        }
+      }
+
       const qty = Number(rawItem.quantity) || 1;
       const lineTotal = unitPrice * qty;
 
-      return {
+      // ✅ NEW: Calculate actual cost for profit tracking
+      let calculatedCost = 0;
+      try {
+        const costData = await MenuCostCalculator.calculateOrderItemCost(
+          conn,
+          rawItem.menuItemId,
+          rawItem.variations || []
+        );
+        calculatedCost = costData.totalCost * qty;
+      } catch (error) {
+        logger.error('[PosOrderService] Cost calculation failed', {
+          menuItemId: rawItem.menuItemId,
+          error: error.message
+        });
+        // Don't fail the order, just log the error
+      }
+
+      pricedItems.push({
         menuItemId: menuItem._id,
         recipeIdSnapshot: config?.recipeIdSnapshot || menuItem.recipeId || null,
+        selectedVariations, // ✅ NEW: Captured variations
         nameSnapshot: config?.menuItemNameSnapshot || menuItem.name,
         codeSnapshot: config?.menuItemCodeSnapshot || menuItem.code || null,
         categoryIdSnapshot: config?.categoryId || menuItem.categoryId || menuItem.category || null,
         quantity: qty,
         unitPrice,
         lineTotal,
+        calculatedCost, // ✅ NEW: Actual cost for reporting
         priceIncludesTax: config?.priceIncludesTax || menuItem.pricing?.priceIncludesTax || false,
         notes: rawItem.notes || null,
-      };
-    });
+      });
+    }
+
+    return pricedItems;
   }
 }
 

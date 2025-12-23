@@ -166,13 +166,23 @@ function validateUniqueVariantNames(variants) {
  */
 class RecipeWithVariantsService {
   /**
-   * Create a recipe with multiple variants
-   * Uses the same pattern as existing recipe and variant services
+   * Create a recipe with multiple variants in a single atomic transaction
+   * 
+   * ✅ PRODUCTION FIX: Added transaction support for data integrity
+   * If any part fails, everything rolls back - no orphaned recipes or variants
+   * 
+   * @param {Object} conn - Tenant database connection
+   * @param {Object} data - Recipe and variants data
+   * @returns {Promise<Object>} Created recipe and variants
    */
   static async createWithVariants(conn, data) {
     const startTime = Date.now();
     let createdRecipe = null;
     const createdVariants = [];
+    
+    // ✅ CRITICAL FIX: Start database transaction for atomicity
+    const session = await conn.startSession();
+    session.startTransaction();
 
     try {
       // ========================================
@@ -235,10 +245,10 @@ class RecipeWithVariantsService {
         await calculateRecipeCost(conn, data.ingredients);
 
       // ========================================
-      // STEP 4: CREATE BASE RECIPE
+      // STEP 4: CREATE BASE RECIPE (with transaction)
       // ========================================
       
-      createdRecipe = await RecipeRepo.create(conn, {
+      createdRecipe = await RecipeRepo.model(conn).create([{
         name,
         customName: data.customName || '',
         slug,
@@ -250,7 +260,9 @@ class RecipeWithVariantsService {
         yield: Number(data.yield || 1),
         isActive: data.isActive !== undefined ? !!data.isActive : true,
         metadata: data.metadata || {},
-      });
+      }], { session });
+      
+      createdRecipe = createdRecipe[0]; // create() with session returns array
 
       logger.info('[RecipeWithVariants] Base recipe created', {
         recipeId: createdRecipe._id,
@@ -275,7 +287,7 @@ class RecipeWithVariantsService {
           const { enriched: variantIngredients, total: variantCost } = 
             await calculateVariantCost(conn, variant);
 
-          const variantDoc = await RecipeVariantRepo.create(conn, {
+          const variantDocs = await RecipeVariantRepo.model(conn).create([{
             recipeId: createdRecipe._id,
             name: String(variant.name).trim(),
             description: variant.description || '',
@@ -287,9 +299,9 @@ class RecipeWithVariantsService {
             totalCost: variantCost,
             isActive: variant.isActive !== undefined ? !!variant.isActive : true,
             metadata: variant.metadata || {}
-          });
+          }], { session });
 
-          createdVariants.push(variantDoc);
+          createdVariants.push(variantDocs[0]);
         }
 
         logger.info('[RecipeWithVariants] Variants created', {
@@ -299,11 +311,13 @@ class RecipeWithVariantsService {
       }
 
       // ========================================
-      // STEP 6: RETURN RESULT
+      // STEP 6: COMMIT TRANSACTION
       // ========================================
       
+      await session.commitTransaction();
+      
       const duration = Date.now() - startTime;
-      logger.info('[RecipeWithVariants] Recipe and variants created successfully', {
+      logger.info('[RecipeWithVariants] ✅ Transaction committed - Recipe and variants created successfully', {
         recipeId: createdRecipe._id,
         recipeName: createdRecipe.name,
         variantCount: createdVariants.length,
@@ -360,19 +374,22 @@ class RecipeWithVariantsService {
 
     } catch (error) {
       // ========================================
-      // ERROR HANDLING & CLEANUP
+      // ERROR HANDLING & TRANSACTION ROLLBACK
       // ========================================
       
-      // If recipe was created but variants failed, log it
-      if (createdRecipe && createdVariants.length < (data.variations || []).length) {
-        logger.warn('[RecipeWithVariants] Recipe created but some variants failed', {
-          recipeId: createdRecipe._id,
-          recipeName: createdRecipe.name,
-          expectedVariants: (data.variations || []).length,
-          createdVariants: createdVariants.length,
-          error: error.message
-        });
-      }
+      // ✅ CRITICAL FIX: Rollback transaction on any error
+      await session.abortTransaction();
+      
+      logger.error('[RecipeWithVariants] ❌ Transaction rolled back due to error', {
+        error: error.message,
+        stack: error.stack,
+        errorName: error.name,
+        errorCode: error.code,
+        recipeName: data?.name,
+        variantCount: data?.variations?.length || 0,
+        createdRecipeId: createdRecipe?._id,
+        createdVariantsCount: createdVariants.length
+      });
 
       // Re-throw AppError as-is
       if (error instanceof AppError) {
@@ -398,22 +415,14 @@ class RecipeWithVariantsService {
       }
 
       // Generic error
-      logger.error('[RecipeWithVariants] Unexpected error', {
-        error: error.message,
-        stack: error.stack,
-        errorName: error.name,
-        errorCode: error.code,
-        recipeName: data?.name,
-        variantCount: data?.variations?.length || 0
-      });
-
       throw new AppError(
         `Failed to create recipe with variants: ${error.message}`,
         500
       );
+    } finally {
+      // ✅ Always end the session
+      session.endSession();
     }
   }
-}
-
-module.exports = RecipeWithVariantsService;
+}module.exports = RecipeWithVariantsService;
 

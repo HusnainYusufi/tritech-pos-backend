@@ -18,8 +18,16 @@ router.use(tenantContext);
  *   post:
  *     tags:
  *       - Menu Variations
- *     summary: Create menu variation
- *     description: Create a new menu variation (size, add-ons, etc.)
+ *     summary: Create menu variation (Production-grade)
+ *     description: |
+ *       Create a new menu variation with recipe variant linking for accurate cost tracking.
+ *       
+ *       **NEW in v2.0**: Now supports linking to recipe variants for:
+ *       - Accurate inventory deduction based on size/flavor
+ *       - Automatic cost calculation
+ *       - Profit margin tracking
+ *       
+ *       **Production URL**: https://api.tritechtechnologyllc.com
  *     parameters:
  *       - $ref: '#/components/parameters/tenantId'
  *     security:
@@ -34,29 +42,110 @@ router.use(tenantContext);
  *             required:
  *               - menuItemId
  *               - name
- *               - priceAdjustment
  *             properties:
  *               menuItemId:
  *                 type: string
- *                 example: item_1234567890
+ *                 description: Menu item ID this variation belongs to
+ *                 example: 507f1f77bcf86cd799439011
+ *               recipeVariantId:
+ *                 type: string
+ *                 description: Recipe variant ID for cost calculation (recommended)
+ *                 example: 507f1f77bcf86cd799439022
  *               name:
  *                 type: string
+ *                 description: Variation name (must be unique per menu item)
  *                 example: Large
- *               priceAdjustment:
- *                 type: number
- *                 example: 3.00
- *               description:
+ *                 maxLength: 160
+ *               type:
  *                 type: string
- *                 example: Large size (14 inch)
+ *                 enum: [size, crust, flavor, addon, combo, custom]
+ *                 description: Type of variation
+ *                 example: size
+ *               priceDelta:
+ *                 type: number
+ *                 description: Price adjustment (+/- from base price)
+ *                 example: 5.00
+ *                 minimum: -1000
+ *                 maximum: 1000
+ *               sizeMultiplier:
+ *                 type: number
+ *                 description: Ingredient quantity multiplier (for size variations)
+ *                 example: 1.5
+ *                 minimum: 0.01
+ *                 maximum: 10
+ *               isDefault:
+ *                 type: boolean
+ *                 description: Set as default variation
+ *                 example: false
+ *               isActive:
+ *                 type: boolean
+ *                 description: Variation availability status
+ *                 example: true
+ *               displayOrder:
+ *                 type: number
+ *                 description: Display order in menu
+ *                 example: 1
+ *           examples:
+ *             sizeVariation:
+ *               summary: Size variation with recipe variant
+ *               value:
+ *                 menuItemId: 507f1f77bcf86cd799439011
+ *                 recipeVariantId: 507f1f77bcf86cd799439022
+ *                 name: Large
+ *                 type: size
+ *                 priceDelta: 5.00
+ *                 sizeMultiplier: 1.5
+ *             flavorVariation:
+ *               summary: Flavor variation
+ *               value:
+ *                 menuItemId: 507f1f77bcf86cd799439011
+ *                 recipeVariantId: 507f1f77bcf86cd799439033
+ *                 name: Pepperoni
+ *                 type: flavor
+ *                 priceDelta: 2.00
  *     responses:
  *       201:
  *         description: Variation created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 201
+ *                 message:
+ *                   type: string
+ *                   example: Menu variation created
+ *                 result:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     menuItemId:
+ *                       type: string
+ *                     recipeVariantId:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     type:
+ *                       type: string
+ *                     priceDelta:
+ *                       type: number
+ *                     calculatedCost:
+ *                       type: number
+ *                       description: Auto-calculated cost for reporting
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       403:
  *         $ref: '#/components/responses/ForbiddenError'
+ *       409:
+ *         description: Variation name already exists for this menu item
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
