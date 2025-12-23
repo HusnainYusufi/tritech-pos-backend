@@ -1,21 +1,86 @@
+/**
+ * Inventory Hooks - Production-grade inventory management
+ * 
+ * ✅ CRITICAL FIX: Now handles variations properly for accurate stock deduction
+ * 
+ * @module modules/inventoryHooks
+ */
+
 const AppError = require('./AppError');
 const logger = require('./logger');
 const BranchInventoryRepo = require('../features/branch-inventory/repository/branchInventory.repository');
 const InventoryTxnRepo = require('../features/inventory/repository/inventoryTxn.repository');
 const { flattenRecipeConsumption } = require('../features/recipe/services/recipeConsumption.helper');
+const RecipeVariantRepo = require('../features/recipe-variant/repository/recipeVariant.repository');
 
+/**
+ * Resolve inventory requirements for an order with variation support
+ * 
+ * ✅ PRODUCTION FIX: Now correctly handles:
+ * - Size multipliers (Large = 1.5x ingredients)
+ * - Additional ingredients from flavor/topping variations
+ * - Proper quantity calculations
+ * 
+ * @param {Object} conn - Tenant database connection
+ * @param {Object} order - POS order with items and variations
+ * @returns {Promise<Array>} Inventory requirements
+ */
 async function resolveOrderRequirements(conn, order) {
   const needs = new Map();
 
   for (const line of order.items || []) {
     if (!line.recipeIdSnapshot) {
-      throw new AppError('Menu item is missing a recipe link for inventory deduction', 400);
+      logger.warn('[InventoryHooks] Menu item missing recipe, skipping inventory deduction', {
+        menuItemId: line.menuItemId,
+        nameSnapshot: line.nameSnapshot
+      });
+      continue; // Skip items without recipes (e.g., services)
     }
 
     const qty = Number(line.quantity) || 0;
     if (qty <= 0) continue;
 
-    const flattened = await flattenRecipeConsumption(conn, line.recipeIdSnapshot, qty);
+    // ✅ CRITICAL FIX: Calculate effective multiplier from variations
+    let effectiveMultiplier = 1.0;
+    const additionalIngredients = [];
+
+    if (line.selectedVariations && line.selectedVariations.length > 0) {
+      for (const variation of line.selectedVariations) {
+        // Handle size variations (multiply base recipe)
+        if (variation.type === 'size' && variation.sizeMultiplier) {
+          effectiveMultiplier = variation.sizeMultiplier;
+          logger.debug('[InventoryHooks] Size variation detected', {
+            variationName: variation.nameSnapshot,
+            multiplier: effectiveMultiplier
+          });
+        }
+
+        // Handle flavor/addon variations (add extra ingredients)
+        if (variation.recipeVariantId && variation.type !== 'size') {
+          try {
+            const recipeVariant = await RecipeVariantRepo.getById(conn, variation.recipeVariantId);
+            if (recipeVariant && recipeVariant.ingredients && recipeVariant.ingredients.length > 0) {
+              additionalIngredients.push(...recipeVariant.ingredients);
+              logger.debug('[InventoryHooks] Additional ingredients from variation', {
+                variationName: variation.nameSnapshot,
+                ingredientCount: recipeVariant.ingredients.length
+              });
+            }
+          } catch (error) {
+            logger.error('[InventoryHooks] Failed to load recipe variant', {
+              recipeVariantId: variation.recipeVariantId,
+              error: error.message
+            });
+          }
+        }
+      }
+    }
+
+    // Flatten base recipe with size multiplier applied
+    const baseQuantity = qty * effectiveMultiplier;
+    const flattened = await flattenRecipeConsumption(conn, line.recipeIdSnapshot, baseQuantity);
+    
+    // Add base recipe ingredients to needs
     for (const ing of flattened) {
       const key = String(ing.itemId);
       const existing = needs.get(key) || { itemId: ing.itemId, qty: 0, recipeIds: new Set() };
@@ -23,9 +88,40 @@ async function resolveOrderRequirements(conn, order) {
       existing.recipeIds.add(String(ing.fromRecipeId));
       needs.set(key, existing);
     }
+
+    // ✅ NEW: Add additional ingredients from variations (also scaled by size)
+    for (const extraIng of additionalIngredients) {
+      if (extraIng.sourceType === 'inventory') {
+        const key = String(extraIng.sourceId);
+        const existing = needs.get(key) || { itemId: extraIng.sourceId, qty: 0, recipeIds: new Set() };
+        // Additional ingredients are also affected by size multiplier
+        existing.qty += (extraIng.quantity || 0) * qty * effectiveMultiplier;
+        needs.set(key, existing);
+      }
+    }
+
+    logger.debug('[InventoryHooks] Order item requirements calculated', {
+      menuItemName: line.nameSnapshot,
+      quantity: qty,
+      sizeMultiplier: effectiveMultiplier,
+      variationCount: line.selectedVariations?.length || 0,
+      uniqueIngredients: needs.size
+    });
   }
 
-  return Array.from(needs.values()).map((n) => ({ ...n, recipeIds: Array.from(n.recipeIds) }));
+  const requirements = Array.from(needs.values()).map((n) => ({ 
+    ...n, 
+    recipeIds: Array.from(n.recipeIds) 
+  }));
+
+  logger.info('[InventoryHooks] Total order requirements', {
+    orderNumber: order.orderNumber,
+    itemCount: order.items.length,
+    uniqueIngredients: requirements.length,
+    totalRequirements: requirements.reduce((sum, r) => sum + r.qty, 0)
+  });
+
+  return requirements;
 }
 
 async function enforceBranchStock(conn, branchId, requirements, { session, orderId, actorId, mode }) {

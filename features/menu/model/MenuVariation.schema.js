@@ -12,19 +12,30 @@ module.exports = (Schema) => {
   const MenuVariationSchema = new Schema({
     menuItemId: { type: Schema.Types.ObjectId, ref: 'MenuItem', required: true, index: true },
 
+    // ✅ CRITICAL FIX: Link to RecipeVariant for proper cost calculation and inventory deduction
+    recipeVariantId: { 
+      type: Schema.Types.ObjectId, 
+      ref: 'RecipeVariant', 
+      default: null,
+      index: true 
+    },
+
     name: { type: String, required: true, trim: true, maxlength: 160 },  // e.g., "Large", "Stuffed Crust", "Extra Cheese"
     type: { type: String, enum: ['size','crust','flavor','addon','combo','custom'], default: 'custom' },
 
     // Pricing behavior
     priceDelta: { type: Number, default: 0 },          // +/− to base price
-    costDelta: { type: Number, default: 0 },           // optional for COGS reporting
-    sizeMultiplier: { type: Number, default: 1 },      // scale all recipe ingredient usage
+    costDelta: { type: Number, default: 0 },           // optional for COGS reporting (deprecated, use calculatedCost)
+    sizeMultiplier: { type: Number, default: 1 },      // scale all recipe ingredient usage (legacy, prefer recipeVariant)
+
+    // ✅ NEW: Calculated cost for reporting and profit margin tracking
+    calculatedCost: { type: Number, default: 0 },      // auto-calculated from recipeVariant or ingredients
 
     // Optional specificity (UX friendly)
     crustType: { type: String, default: '' },
     flavorTag: { type: String, default: '' },
 
-    // Per-variation ingredient overrides/additions
+    // Per-variation ingredient overrides/additions (legacy, prefer recipeVariantId)
     ingredients: { type: [VariationIngredientSchema], default: [] },
 
     isDefault: { type: Boolean, default: false },
@@ -34,7 +45,10 @@ module.exports = (Schema) => {
     metadata: { type: Object, default: {} },
   }, { timestamps: true });
 
+  // ✅ CRITICAL: Ensure unique variation names per menu item
+  MenuVariationSchema.index({ menuItemId: 1, name: 1 }, { unique: true });
   MenuVariationSchema.index({ menuItemId: 1, displayOrder: 1 });
+  MenuVariationSchema.index({ recipeVariantId: 1 });
 
   return MenuVariationSchema;
 };
