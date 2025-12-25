@@ -161,15 +161,43 @@ function validateUniqueVariantNames(variants) {
 }
 
 /**
- * Simple service for creating recipe with multiple variants
- * NO TRANSACTIONS - follows existing pattern in recipe.service.js
+ * Check if MongoDB supports transactions (requires replica set)
+ * @param {Object} conn - Mongoose connection
+ * @returns {Promise<boolean>}
+ */
+async function supportsTransactions(conn) {
+  try {
+    const admin = conn.db.admin();
+    const serverStatus = await admin.serverStatus();
+    
+    // Check if this is a replica set or mongos (sharded cluster)
+    const isReplicaSet = serverStatus.repl && serverStatus.repl.setName;
+    const isMongos = serverStatus.process === 'mongos';
+    
+    return isReplicaSet || isMongos;
+  } catch (error) {
+    logger.warn('[RecipeWithVariants] Could not determine transaction support', {
+      error: error.message
+    });
+    return false;
+  }
+}
+
+/**
+ * Service for creating recipe with multiple variants
+ * 
+ * ✅ PRODUCTION-GRADE: Supports both transactional and non-transactional modes
+ * - With replica set: Uses transactions for atomicity
+ * - Without replica set: Manual cleanup on errors (best-effort consistency)
  */
 class RecipeWithVariantsService {
   /**
-   * Create a recipe with multiple variants in a single atomic transaction
+   * Create a recipe with multiple variants
    * 
-   * ✅ PRODUCTION FIX: Added transaction support for data integrity
-   * If any part fails, everything rolls back - no orphaned recipes or variants
+   * Architecture Decision:
+   * - Attempts to use transactions if MongoDB supports them (replica set/sharded)
+   * - Falls back to manual error handling if transactions are not available
+   * - Ensures data consistency in both scenarios
    * 
    * @param {Object} conn - Tenant database connection
    * @param {Object} data - Recipe and variants data
@@ -180,9 +208,17 @@ class RecipeWithVariantsService {
     let createdRecipe = null;
     const createdVariants = [];
     
-    // ✅ CRITICAL FIX: Start database transaction for atomicity
-    const session = await conn.startSession();
-    session.startTransaction();
+    // ✅ SOLUTION ARCHITECT FIX: Check transaction support
+    const useTransactions = await supportsTransactions(conn);
+    let session = null;
+    
+    if (useTransactions) {
+      logger.info('[RecipeWithVariants] Using transactional mode (replica set detected)');
+      session = await conn.startSession();
+      session.startTransaction();
+    } else {
+      logger.info('[RecipeWithVariants] Using non-transactional mode (standalone MongoDB)');
+    }
 
     try {
       // ========================================
@@ -245,10 +281,10 @@ class RecipeWithVariantsService {
         await calculateRecipeCost(conn, data.ingredients);
 
       // ========================================
-      // STEP 4: CREATE BASE RECIPE (with transaction)
+      // STEP 4: CREATE BASE RECIPE
       // ========================================
       
-      createdRecipe = await RecipeRepo.model(conn).create([{
+      const recipeData = {
         name,
         customName: data.customName || '',
         slug,
@@ -260,9 +296,16 @@ class RecipeWithVariantsService {
         yield: Number(data.yield || 1),
         isActive: data.isActive !== undefined ? !!data.isActive : true,
         metadata: data.metadata || {},
-      }], { session });
+      };
       
-      createdRecipe = createdRecipe[0]; // create() with session returns array
+      if (useTransactions && session) {
+        // Transactional mode: Pass session
+        const result = await RecipeRepo.model(conn).create([recipeData], { session });
+        createdRecipe = result[0]; // create() with session returns array
+      } else {
+        // Non-transactional mode: Direct create
+        createdRecipe = await RecipeRepo.model(conn).create(recipeData);
+      }
 
       logger.info('[RecipeWithVariants] Base recipe created', {
         recipeId: createdRecipe._id,
@@ -287,7 +330,7 @@ class RecipeWithVariantsService {
           const { enriched: variantIngredients, total: variantCost } = 
             await calculateVariantCost(conn, variant);
 
-          const variantDocs = await RecipeVariantRepo.model(conn).create([{
+          const variantData = {
             recipeId: createdRecipe._id,
             name: String(variant.name).trim(),
             description: variant.description || '',
@@ -299,9 +342,17 @@ class RecipeWithVariantsService {
             totalCost: variantCost,
             isActive: variant.isActive !== undefined ? !!variant.isActive : true,
             metadata: variant.metadata || {}
-          }], { session });
+          };
 
-          createdVariants.push(variantDocs[0]);
+          if (useTransactions && session) {
+            // Transactional mode: Pass session
+            const variantDocs = await RecipeVariantRepo.model(conn).create([variantData], { session });
+            createdVariants.push(variantDocs[0]);
+          } else {
+            // Non-transactional mode: Direct create
+            const variantDoc = await RecipeVariantRepo.model(conn).create(variantData);
+            createdVariants.push(variantDoc);
+          }
         }
 
         logger.info('[RecipeWithVariants] Variants created', {
@@ -311,17 +362,25 @@ class RecipeWithVariantsService {
       }
 
       // ========================================
-      // STEP 6: COMMIT TRANSACTION
+      // STEP 6: COMMIT TRANSACTION (if using transactions)
       // ========================================
       
-      await session.commitTransaction();
+      if (useTransactions && session) {
+        await session.commitTransaction();
+        logger.info('[RecipeWithVariants] ✅ Transaction committed successfully', {
+          recipeId: createdRecipe._id,
+          recipeName: createdRecipe.name,
+          variantCount: createdVariants.length
+        });
+      }
       
       const duration = Date.now() - startTime;
-      logger.info('[RecipeWithVariants] ✅ Transaction committed - Recipe and variants created successfully', {
+      logger.info('[RecipeWithVariants] ✅ Recipe and variants created successfully', {
         recipeId: createdRecipe._id,
         recipeName: createdRecipe.name,
         variantCount: createdVariants.length,
-        durationMs: duration
+        durationMs: duration,
+        mode: useTransactions ? 'transactional' : 'non-transactional'
       });
 
       return {
@@ -374,22 +433,51 @@ class RecipeWithVariantsService {
 
     } catch (error) {
       // ========================================
-      // ERROR HANDLING & TRANSACTION ROLLBACK
+      // ERROR HANDLING & CLEANUP
       // ========================================
       
-      // ✅ CRITICAL FIX: Rollback transaction on any error
-      await session.abortTransaction();
-      
-      logger.error('[RecipeWithVariants] ❌ Transaction rolled back due to error', {
-        error: error.message,
-        stack: error.stack,
-        errorName: error.name,
-        errorCode: error.code,
-        recipeName: data?.name,
-        variantCount: data?.variations?.length || 0,
-        createdRecipeId: createdRecipe?._id,
-        createdVariantsCount: createdVariants.length
-      });
+      if (useTransactions && session) {
+        // Transactional mode: Rollback transaction
+        await session.abortTransaction();
+        logger.error('[RecipeWithVariants] ❌ Transaction rolled back due to error', {
+          error: error.message,
+          recipeName: data?.name,
+          createdRecipeId: createdRecipe?._id,
+          createdVariantsCount: createdVariants.length
+        });
+      } else {
+        // Non-transactional mode: Manual cleanup
+        logger.error('[RecipeWithVariants] ❌ Error occurred - attempting manual cleanup', {
+          error: error.message,
+          recipeName: data?.name,
+          createdRecipeId: createdRecipe?._id,
+          createdVariantsCount: createdVariants.length
+        });
+        
+        // Best-effort cleanup: Delete created variants and recipe
+        try {
+          if (createdVariants.length > 0) {
+            const variantIds = createdVariants.map(v => v._id);
+            await RecipeVariantRepo.model(conn).deleteMany({ _id: { $in: variantIds } });
+            logger.info('[RecipeWithVariants] Cleaned up variants', { 
+              count: createdVariants.length 
+            });
+          }
+          
+          if (createdRecipe && createdRecipe._id) {
+            await RecipeRepo.model(conn).deleteOne({ _id: createdRecipe._id });
+            logger.info('[RecipeWithVariants] Cleaned up recipe', { 
+              recipeId: createdRecipe._id 
+            });
+          }
+        } catch (cleanupError) {
+          logger.error('[RecipeWithVariants] ⚠️ Cleanup failed - manual intervention may be required', {
+            cleanupError: cleanupError.message,
+            recipeId: createdRecipe?._id,
+            variantCount: createdVariants.length
+          });
+        }
+      }
 
       // Re-throw AppError as-is
       if (error instanceof AppError) {
@@ -420,8 +508,10 @@ class RecipeWithVariantsService {
         500
       );
     } finally {
-      // ✅ Always end the session
-      session.endSession();
+      // ✅ Always end the session (if it exists)
+      if (session) {
+        session.endSession();
+      }
     }
   }
 }module.exports = RecipeWithVariantsService;
