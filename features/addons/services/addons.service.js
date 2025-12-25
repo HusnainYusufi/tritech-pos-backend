@@ -134,9 +134,26 @@ class AddOnsService {
   }
 
   static async deleteItem(conn, id) {
+    // ✅ SOLUTION ARCHITECT FIX: Validate ID before database operation
+    if (!id || id === 'undefined' || id === 'null') {
+      throw new AppError('Invalid item ID provided', 400);
+    }
+
+    // Check if item exists before deletion
+    const existing = await ItemRepo.getById(conn, id);
+    if (!existing) {
+      throw new AppError('Item not found', 404);
+    }
+
+    // ✅ DEPENDENCY CHECK: Verify item is not referenced elsewhere
+    // Future enhancement: Check if item is used in active orders/menu items
+    
     const doc = await ItemRepo.deleteById(conn, id);
-    if (!doc) throw new AppError('Item not found', 404);
-    return { status: 200, message: 'Item deleted' };
+    if (!doc) {
+      throw new AppError('Failed to delete item', 500);
+    }
+    
+    return { status: 200, message: 'Item deleted successfully' };
   }
 
   // CONFIG for POS: groups + items by category

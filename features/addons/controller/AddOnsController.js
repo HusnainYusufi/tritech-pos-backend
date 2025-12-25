@@ -580,8 +580,35 @@ router.put('/items/:id',
 router.delete('/items/:id',
   checkPerms(['menu.addons.manage']),
   async (req,res,next)=>{
-    try { const r = await svc.deleteItem(req.tenantDb, req.params.id); res.status(r.status).json(r); }
-    catch(e){ logger.error(e); next(e); }
+    try {
+      // ✅ SOLUTION ARCHITECT FIX: Validate ID parameter
+      const itemId = req.params.id;
+      
+      if (!itemId || itemId === 'undefined' || itemId === 'null') {
+        logger.error('[AddOnsController] Invalid item ID in delete request', {
+          itemId,
+          url: req.originalUrl,
+          params: req.params
+        });
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: 'Invalid item ID provided. Please check the URL and try again.'
+          }
+        });
+      }
+
+      const r = await svc.deleteItem(req.tenantDb, itemId);
+      res.status(r.status).json(r);
+    }
+    catch(e){
+      logger.error('[AddOnsController] Delete item failed', {
+        error: e.message,
+        itemId: req.params.id,
+        url: req.originalUrl
+      });
+      next(e);
+    }
   }
 );
 
