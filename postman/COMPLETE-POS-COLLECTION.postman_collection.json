@@ -1,0 +1,1689 @@
+{
+  "info": {
+    "name": "Tritech POS - Complete Collection (McDonald's Ready)",
+    "description": "Complete API collection for Tritech POS System\n\n## Quick Start\n1. Set environment variables (tenant-id, base-url)\n2. Run 'Setup' folder to create initial data\n3. Run 'POS Workflow' folder for cashier operations\n\n## Environment Variables Required\n- base_url: http://localhost:3000\n- tenant_id: your-tenant-slug\n- token: (auto-set after login)\n- branch_id: (auto-set after branch creation)\n- pos_id: (auto-set after terminal creation)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "tritech-pos"
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Superadmin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('superadmin_token', response.token);",
+                  "    pm.environment.set('token', response.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@tritech.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Tenant User Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('token', response.result.token);",
+                  "    pm.environment.set('user_id', response.result.user._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@mcdonalds.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["t", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Cashier PIN Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('cashier_token', response.result.token);",
+                  "    pm.environment.set('till_session_id', response.result.tillSessionId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"1234\",\n  \"branchId\": \"{{branch_id}}\",\n  \"posId\": \"{{pos_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/auth/login-pin",
+              "host": ["{{base_url}}"],
+              "path": ["t", "auth", "login-pin"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Tenant Setup",
+      "item": [
+        {
+          "name": "Create Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('tenant_id', response.result.slug);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{superadmin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"McDonald's Saudi Arabia\",\n  \"slug\": \"mcdonalds-sa\",\n  \"email\": \"admin@mcdonalds-sa.com\",\n  \"phone\": \"+966501234567\",\n  \"address\": \"Riyadh, Saudi Arabia\",\n  \"planId\": \"enterprise\",\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants",
+              "host": ["{{base_url}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "Get Tenant Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/tenant/profile",
+              "host": ["{{base_url}}"],
+              "path": ["t", "tenant", "profile"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Branch Management",
+      "item": [
+        {
+          "name": "Create Branch - Downtown",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('branch_id', response.result._id);",
+                  "    pm.environment.set('branch_downtown_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"McDonald's Downtown Riyadh\",\n  \"code\": \"mcd-downtown\",\n  \"status\": \"active\",\n  \"contact\": {\n    \"phone\": \"+966501234567\",\n    \"email\": \"downtown@mcdonalds-sa.com\"\n  },\n  \"address\": {\n    \"line1\": \"King Fahd Road\",\n    \"city\": \"Riyadh\",\n    \"state\": \"Riyadh Province\",\n    \"postalCode\": \"11564\",\n    \"country\": \"Saudi Arabia\"\n  },\n  \"timezone\": \"Asia/Riyadh\",\n  \"currency\": \"SAR\",\n  \"tax\": {\n    \"mode\": \"exclusive\",\n    \"rate\": 15,\n    \"vatNumber\": \"SA123456789\"\n  },\n  \"posConfig\": {\n    \"orderPrefix\": \"DT\",\n    \"receiptFooter\": \"Thank you for choosing McDonald's!\",\n    \"enableHoldOrders\": true,\n    \"enableTableService\": false\n  },\n  \"printers\": [\n    {\n      \"name\": \"Kitchen Printer\",\n      \"type\": \"network\",\n      \"ip\": \"192.168.1.100\",\n      \"port\": 9100,\n      \"target\": \"kitchen\",\n      \"enabled\": true\n    },\n    {\n      \"name\": \"Receipt Printer\",\n      \"type\": \"network\",\n      \"ip\": \"192.168.1.101\",\n      \"port\": 9100,\n      \"target\": \"receipt\",\n      \"enabled\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches"]
+            }
+          }
+        },
+        {
+          "name": "Create Branch - Airport",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('branch_airport_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"McDonald's King Khalid Airport\",\n  \"code\": \"mcd-airport\",\n  \"status\": \"active\",\n  \"contact\": {\n    \"phone\": \"+966501234568\",\n    \"email\": \"airport@mcdonalds-sa.com\"\n  },\n  \"address\": {\n    \"line1\": \"King Khalid International Airport\",\n    \"city\": \"Riyadh\",\n    \"state\": \"Riyadh Province\",\n    \"postalCode\": \"13455\",\n    \"country\": \"Saudi Arabia\"\n  },\n  \"timezone\": \"Asia/Riyadh\",\n  \"currency\": \"SAR\",\n  \"tax\": {\n    \"mode\": \"exclusive\",\n    \"rate\": 15,\n    \"vatNumber\": \"SA123456789\"\n  },\n  \"posConfig\": {\n    \"orderPrefix\": \"AP\",\n    \"receiptFooter\": \"Have a safe flight!\",\n    \"enableHoldOrders\": true,\n    \"enableTableService\": false\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches"]
+            }
+          }
+        },
+        {
+          "name": "List All Branches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branches",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Inventory Setup",
+      "item": [
+        {
+          "name": "Create Inventory Category - Meat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('category_meat_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Meat & Poultry\",\n  \"description\": \"Fresh meat and poultry products\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/inventory/categories",
+              "host": ["{{base_url}}"],
+              "path": ["t", "inventory", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Create Inventory Category - Dairy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('category_dairy_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dairy Products\",\n  \"description\": \"Cheese, milk, butter\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/inventory/categories",
+              "host": ["{{base_url}}"],
+              "path": ["t", "inventory", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Create Inventory Item - Beef Patty",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('item_beef_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Beef Patty\",\n  \"type\": \"stock\",\n  \"categoryId\": \"{{category_meat_id}}\",\n  \"baseUnit\": \"pc\",\n  \"reorderPoint\": 100,\n  \"metadata\": {\n    \"costPerUnit\": 1.20\n  },\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/inventory/items",
+              "host": ["{{base_url}}"],
+              "path": ["t", "inventory", "items"]
+            }
+          }
+        },
+        {
+          "name": "Create Inventory Item - Cheese Slice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('item_cheese_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cheese Slice\",\n  \"type\": \"stock\",\n  \"categoryId\": \"{{category_dairy_id}}\",\n  \"baseUnit\": \"pc\",\n  \"reorderPoint\": 200,\n  \"metadata\": {\n    \"costPerUnit\": 0.30\n  },\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/inventory/items",
+              "host": ["{{base_url}}"],
+              "path": ["t", "inventory", "items"]
+            }
+          }
+        },
+        {
+          "name": "Create Inventory Item - Burger Bun",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('item_bun_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Burger Bun\",\n  \"type\": \"stock\",\n  \"categoryId\": \"{{category_dairy_id}}\",\n  \"baseUnit\": \"pc\",\n  \"reorderPoint\": 500,\n  \"metadata\": {\n    \"costPerUnit\": 0.50\n  },\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/inventory/items",
+              "host": ["{{base_url}}"],
+              "path": ["t", "inventory", "items"]
+            }
+          }
+        },
+        {
+          "name": "Assign Inventory to Branch - Beef",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"itemId\": \"{{item_beef_id}}\",\n  \"quantity\": 500,\n  \"reorderPoint\": 100,\n  \"minStock\": 50,\n  \"maxStock\": 1000,\n  \"costPerUnit\": 1.20,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branch-inventory",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branch-inventory"]
+            }
+          }
+        },
+        {
+          "name": "Assign Inventory to Branch - Cheese",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"itemId\": \"{{item_cheese_id}}\",\n  \"quantity\": 1000,\n  \"reorderPoint\": 200,\n  \"minStock\": 100,\n  \"maxStock\": 2000,\n  \"costPerUnit\": 0.30,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branch-inventory",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branch-inventory"]
+            }
+          }
+        },
+        {
+          "name": "Assign Inventory to Branch - Bun",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"itemId\": \"{{item_bun_id}}\",\n  \"quantity\": 2000,\n  \"reorderPoint\": 500,\n  \"minStock\": 250,\n  \"maxStock\": 3000,\n  \"costPerUnit\": 0.50,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branch-inventory",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branch-inventory"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Recipe Management",
+      "item": [
+        {
+          "name": "Create Recipe - Big Mac Base",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('recipe_bigmac_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Big Mac\",\n  \"type\": \"final\",\n  \"description\": \"Iconic Big Mac burger\",\n  \"ingredients\": [\n    {\n      \"sourceType\": \"inventory\",\n      \"sourceId\": \"{{item_bun_id}}\",\n      \"quantity\": 1,\n      \"unit\": \"pc\",\n      \"costPerUnit\": 0.50\n    },\n    {\n      \"sourceType\": \"inventory\",\n      \"sourceId\": \"{{item_beef_id}}\",\n      \"quantity\": 2,\n      \"unit\": \"pc\",\n      \"costPerUnit\": 1.20\n    },\n    {\n      \"sourceType\": \"inventory\",\n      \"sourceId\": \"{{item_cheese_id}}\",\n      \"quantity\": 1,\n      \"unit\": \"pc\",\n      \"costPerUnit\": 0.30\n    }\n  ],\n  \"yield\": 1,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/recipes",
+              "host": ["{{base_url}}"],
+              "path": ["t", "recipes"]
+            }
+          }
+        },
+        {
+          "name": "Create Recipe Variant - Large Big Mac",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('recipe_variant_large_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipeId\": \"{{recipe_bigmac_id}}\",\n  \"name\": \"Large\",\n  \"type\": \"size\",\n  \"sizeMultiplier\": 1.5,\n  \"ingredients\": [],\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/recipe-variants",
+              "host": ["{{base_url}}"],
+              "path": ["t", "recipe-variants"]
+            }
+          }
+        },
+        {
+          "name": "Create Recipe Variant - Extra Cheese",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('recipe_variant_cheese_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipeId\": \"{{recipe_bigmac_id}}\",\n  \"name\": \"Extra Cheese\",\n  \"type\": \"addon\",\n  \"sizeMultiplier\": 1.0,\n  \"ingredients\": [\n    {\n      \"sourceType\": \"inventory\",\n      \"sourceId\": \"{{item_cheese_id}}\",\n      \"quantity\": 1,\n      \"unit\": \"pc\",\n      \"costPerUnit\": 0.30\n    }\n  ],\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/recipe-variants",
+              "host": ["{{base_url}}"],
+              "path": ["t", "recipe-variants"]
+            }
+          }
+        },
+        {
+          "name": "Get Recipe with Variants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/recipes/{{recipe_bigmac_id}}/with-variants",
+              "host": ["{{base_url}}"],
+              "path": ["t", "recipes", "{{recipe_bigmac_id}}", "with-variants"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Menu Management",
+      "item": [
+        {
+          "name": "Create Menu Category - Burgers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('menu_category_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Burgers\",\n  \"description\": \"Our signature burgers\",\n  \"displayOrder\": 1,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/menu/categories",
+              "host": ["{{base_url}}"],
+              "path": ["t", "menu", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Create Menu Item - Big Mac",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('menu_item_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Big Mac\",\n  \"description\": \"Two all-beef patties, special sauce, lettuce, cheese, pickles, onions on a sesame seed bun\",\n  \"categoryId\": \"{{menu_category_id}}\",\n  \"recipeId\": \"{{recipe_bigmac_id}}\",\n  \"pricing\": {\n    \"basePrice\": 15.00,\n    \"priceIncludesTax\": false,\n    \"currency\": \"SAR\"\n  },\n  \"isActive\": true,\n  \"displayOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/menu/items",
+              "host": ["{{base_url}}"],
+              "path": ["t", "menu", "items"]
+            }
+          }
+        },
+        {
+          "name": "Create Menu Variation - Large",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('menu_variation_large_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"menuItemId\": \"{{menu_item_id}}\",\n  \"recipeVariantId\": \"{{recipe_variant_large_id}}\",\n  \"name\": \"Large\",\n  \"type\": \"size\",\n  \"priceDelta\": 5.00,\n  \"sizeMultiplier\": 1.5,\n  \"isDefault\": false,\n  \"isActive\": true,\n  \"displayOrder\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/menu/variations",
+              "host": ["{{base_url}}"],
+              "path": ["t", "menu", "variations"]
+            }
+          }
+        },
+        {
+          "name": "Create Menu Variation - Extra Cheese",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('menu_variation_cheese_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"menuItemId\": \"{{menu_item_id}}\",\n  \"recipeVariantId\": \"{{recipe_variant_cheese_id}}\",\n  \"name\": \"Extra Cheese\",\n  \"type\": \"addon\",\n  \"priceDelta\": 2.00,\n  \"isDefault\": false,\n  \"isActive\": true,\n  \"displayOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/menu/variations",
+              "host": ["{{base_url}}"],
+              "path": ["t", "menu", "variations"]
+            }
+          }
+        },
+        {
+          "name": "Configure Branch Menu Pricing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"menuItemId\": \"{{menu_item_id}}\",\n  \"sellingPrice\": 15.00,\n  \"priceIncludesTax\": false,\n  \"isAvailable\": true,\n  \"isVisibleInPOS\": true,\n  \"isVisibleInOnline\": true,\n  \"displayOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branch-menu",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branch-menu"]
+            }
+          }
+        },
+        {
+          "name": "Get Effective Branch Menu",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branch-menu/effective?branchId={{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branch-menu", "effective"],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{branch_id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Staff Management",
+      "item": [
+        {
+          "name": "Create Staff - Cashier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('staff_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Ahmed Al-Rashid\",\n  \"email\": \"ahmed.cashier@mcdonalds-sa.com\",\n  \"phone\": \"+966501234569\",\n  \"roles\": [\"cashier\"],\n  \"branchIds\": [\"{{branch_id}}\"],\n  \"isStaff\": true,\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/staff",
+              "host": ["{{base_url}}"],
+              "path": ["t", "staff"]
+            }
+          }
+        },
+        {
+          "name": "Set Staff PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"1234\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/staff/{{staff_id}}/set-pin",
+              "host": ["{{base_url}}"],
+              "path": ["t", "staff", "{{staff_id}}", "set-pin"]
+            }
+          }
+        },
+        {
+          "name": "List All Staff",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/staff",
+              "host": ["{{base_url}}"],
+              "path": ["t", "staff"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. POS Terminal Setup",
+      "item": [
+        {
+          "name": "Create POS Terminal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('pos_id', response.result._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"POS Terminal 1\",\n  \"code\": \"POS-001\",\n  \"branchId\": \"{{branch_id}}\",\n  \"status\": \"active\",\n  \"ipAddress\": \"192.168.1.50\",\n  \"metadata\": {\n    \"location\": \"Counter 1\",\n    \"hardwareId\": \"TERM-001\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/pos/terminals",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "terminals"]
+            }
+          }
+        },
+        {
+          "name": "List POS Terminals (PUBLIC)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/terminals?branchId={{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "terminals"],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{branch_id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. POS Operations - Complete Workflow",
+      "item": [
+        {
+          "name": "1. Cashier PIN Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('cashier_token', response.result.token);",
+                  "    pm.environment.set('token', response.result.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"1234\",\n  \"branchId\": \"{{branch_id}}\",\n  \"posId\": \"{{pos_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/auth/login-pin",
+              "host": ["{{base_url}}"],
+              "path": ["t", "auth", "login-pin"]
+            }
+          }
+        },
+        {
+          "name": "2. Open Till Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('till_session_id', response.result.tillSession._id);",
+                  "    pm.environment.set('token', response.result.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cashier_token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"posId\": \"{{pos_id}}\",\n  \"openingAmount\": 100.00,\n  \"notes\": \"Starting shift - Morning\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/pos/till/open",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "till", "open"]
+            }
+          }
+        },
+        {
+          "name": "3. Get POS Menu",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/menu?branchId={{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "menu"],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{branch_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Create Order - Simple (No Variations)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('order_id', response.result.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"items\": [\n    {\n      \"menuItemId\": \"{{menu_item_id}}\",\n      \"quantity\": 1,\n      \"notes\": \"No pickles\"\n    }\n  ],\n  \"customerName\": \"Walk-in Customer\",\n  \"paymentMethod\": \"cash\",\n  \"amountPaid\": 20.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/pos/orders",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "orders"]
+            }
+          }
+        },
+        {
+          "name": "5. Create Order - With Variations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('order_with_variations_id', response.result.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"items\": [\n    {\n      \"menuItemId\": \"{{menu_item_id}}\",\n      \"variations\": [\n        \"{{menu_variation_large_id}}\",\n        \"{{menu_variation_cheese_id}}\"\n      ],\n      \"quantity\": 2,\n      \"notes\": \"Extra cheese, no onions\"\n    }\n  ],\n  \"customerName\": \"Ahmed Ali\",\n  \"customerPhone\": \"+966501234567\",\n  \"paymentMethod\": \"card\",\n  \"amountPaid\": 50.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/pos/orders?printReceipt=true&receiptFormat=html",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "orders"],
+              "query": [
+                {
+                  "key": "printReceipt",
+                  "value": "true"
+                },
+                {
+                  "key": "receiptFormat",
+                  "value": "html"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Create Order - Multiple Items",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branch_id}}\",\n  \"items\": [\n    {\n      \"menuItemId\": \"{{menu_item_id}}\",\n      \"variations\": [\"{{menu_variation_large_id}}\"],\n      \"quantity\": 2\n    },\n    {\n      \"menuItemId\": \"{{menu_item_id}}\",\n      \"quantity\": 1,\n      \"notes\": \"Regular size\"\n    }\n  ],\n  \"customerName\": \"Family Order\",\n  \"paymentMethod\": \"cash\",\n  \"amountPaid\": 100.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/pos/orders",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "orders"]
+            }
+          }
+        },
+        {
+          "name": "7. List Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/orders?branchId={{branch_id}}&page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "orders"],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{branch_id}}"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "8. Get Order Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/orders/{{order_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "orders", "{{order_id}}"]
+            }
+          }
+        },
+        {
+          "name": "9. Get Receipt (HTML)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/orders/{{order_id}}/receipt?format=html",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "orders", "{{order_id}}", "receipt"],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "html"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "10. Print Receipt (Thermal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"thermal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/pos/orders/{{order_id}}/print",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "orders", "{{order_id}}", "print"]
+            }
+          }
+        },
+        {
+          "name": "11. Get Cashier Session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/pos/till/session",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "till", "session"]
+            }
+          }
+        },
+        {
+          "name": "12. Close Till Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"declaredClosingAmount\": 1547.50,\n  \"systemClosingAmount\": 1550.00,\n  \"cashCounts\": {\n    \"500\": 2,\n    \"100\": 5,\n    \"50\": 4,\n    \"20\": 10,\n    \"10\": 5,\n    \"5\": 9,\n    \"1\": 2\n  },\n  \"notes\": \"End of shift - All good\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/pos/till/close",
+              "host": ["{{base_url}}"],
+              "path": ["t", "pos", "till", "close"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Reports & Analytics",
+      "item": [
+        {
+          "name": "Get Branch Inventory Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branch-inventory?branchId={{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branch-inventory"],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{branch_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Branch Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/summary",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/dashboard/stats",
+              "host": ["{{base_url}}"],
+              "path": ["t", "dashboard", "stats"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "tenant_id",
+      "value": "mcdonalds-sa",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "superadmin_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cashier_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pos_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "menu_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "menu_variation_large_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "menu_variation_cheese_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "till_session_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
+
