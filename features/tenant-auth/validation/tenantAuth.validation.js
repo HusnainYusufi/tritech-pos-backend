@@ -20,12 +20,9 @@ const login = Joi.object({
 const money = Joi.number().min(0);
 
 const loginPin = Joi.object({
-  pin: Joi.string().pattern(/^[0-9]{4,8}$/).required().messages({
-    'string.pattern.base': 'PIN must be 4-8 digits'
-  }),
-  branchId: Joi.string().required(),
-  posId: Joi.string().required(),
-  defaultBranchId: Joi.string().allow('', null)
+  pin: Joi.string().pattern(/^[0-9]{6}$/).required().messages({
+    'string.pattern.base': 'PIN must be exactly 6 digits'
+  })
 });
 
 const logoutPin = Joi.object({

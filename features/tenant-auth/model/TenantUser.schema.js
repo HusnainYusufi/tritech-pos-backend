@@ -14,8 +14,12 @@ module.exports = (Schema) => {
       branchId: { type: Schema.Types.ObjectId, default: null }
     }],
 
-    branchIds: { type: [Schema.Types.ObjectId], default: [] }, // optional legacy field
-    posIds: { type: [Schema.Types.ObjectId], ref: 'PosTerminal', default: [] }, // optional POS restrictions
+    branchIds: { type: [Schema.Types.ObjectId], default: [] }, // optional legacy field (for multi-branch access)
+    
+    // 🔒 CASHIER ASSIGNMENT - Single branch/POS assignment for staff
+    assignedBranchId: { type: Schema.Types.ObjectId, ref: 'Branch', default: null }, // Primary branch assignment for cashiers
+    posIds: { type: [Schema.Types.ObjectId], ref: 'PosTerminal', default: [] }, // POS restrictions (empty = can use any POS in assigned branch)
+    
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, default: false },
 
@@ -41,5 +45,6 @@ module.exports = (Schema) => {
 
   TenantUserSchema.index({ email: 1 }, { unique: true });
   TenantUserSchema.index({ pinKey: 1 }, { unique: true, sparse: true });
+  TenantUserSchema.index({ assignedBranchId: 1, isStaff: 1 });
   return TenantUserSchema;
 };

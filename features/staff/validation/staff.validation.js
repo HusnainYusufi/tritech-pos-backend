@@ -3,8 +3,8 @@
 
 const Joi = require('joi');
 
-const pinSchema = Joi.string().pattern(/^[0-9]{4,8}$/).messages({
-  'string.pattern.base': 'PIN must be 4-8 digits',
+const pinSchema = Joi.string().pattern(/^[0-9]{6}$/).messages({
+  'string.pattern.base': 'PIN must be exactly 6 digits',
 });
 
 const roleGrantSchema = Joi.object({
@@ -18,6 +18,8 @@ const createStaff = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(8).max(128).optional(),
   branchIds: Joi.array().items(Joi.string()).min(1).optional(),
+  assignedBranchId: Joi.string().optional(), // Primary branch assignment for cashiers
+  posIds: Joi.array().items(Joi.string()).optional(), // POS terminal restrictions
   roles: Joi.array().items(Joi.string()).optional(),
   roleGrants: Joi.array().items(roleGrantSchema).optional(),
   pin: pinSchema.optional(),
@@ -31,6 +33,8 @@ const updateStaff = Joi.object({
   email: Joi.string().email().optional(),
   password: Joi.string().min(8).max(128).optional(),
   branchIds: Joi.array().items(Joi.string()).min(1).optional(),
+  assignedBranchId: Joi.string().optional(), // Primary branch assignment for cashiers
+  posIds: Joi.array().items(Joi.string()).optional(), // POS terminal restrictions
   roles: Joi.array().items(Joi.string()).optional(),
   roleGrants: Joi.array().items(roleGrantSchema).optional(),
   position: Joi.string().max(120).optional(),

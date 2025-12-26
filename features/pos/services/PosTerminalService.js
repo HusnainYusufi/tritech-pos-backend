@@ -95,6 +95,30 @@ class PosTerminalService {
     if (terminal.status !== 'active') throw new AppError('POS terminal is not active', 403);
     return terminal;
   }
+
+  /**
+   * Get available POS terminals for a cashier based on their restrictions
+   * @param {Object} conn - Database connection
+   * @param {String} branchId - Branch ID
+   * @param {Array<String>} posIds - Array of allowed POS IDs (empty = all POS in branch)
+   * @returns {Promise<Array>} List of available POS terminals
+   */
+  static async getAvailableForCashier(conn, branchId, posIds = []) {
+    const filter = { branchId, status: 'active' };
+    
+    // If posIds is specified, filter to only those terminals
+    if (posIds && posIds.length > 0) {
+      filter._id = { $in: posIds };
+    }
+    
+    const terminals = await PosTerminalRepo.model(conn)
+      .find(filter)
+      .select('_id name machineId status')
+      .sort({ name: 1 })
+      .lean();
+    
+    return terminals;
+  }
 }
 
 module.exports = PosTerminalService;

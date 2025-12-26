@@ -89,7 +89,7 @@ async function getActor(conn, actorId) {
 
 class StaffService {
   static async create(conn, actorId, payload, branchContextId = null) {
-    const { fullName, email, password, branchIds, roles, roleGrants = [], pin, position, metadata } = payload;
+    const { fullName, email, password, branchIds, assignedBranchId, posIds, roles, roleGrants = [], pin, position, metadata } = payload;
 
     const actorDoc = await getActor(conn, actorId);
     const actorTenantScope = hasTenantScope(actorDoc);
@@ -98,6 +98,36 @@ class StaffService {
     const normalizedBranches = await ensureBranchesExist(conn, branchIds, { required: false });
 
     guardBranchScope(actorDoc, branchContextId, normalizedBranches);
+
+    // Validate assignedBranchId if provided
+    let normalizedAssignedBranch = null;
+    if (assignedBranchId) {
+      const validatedBranches = await ensureBranchesExist(conn, [assignedBranchId], { required: true });
+      normalizedAssignedBranch = validatedBranches[0];
+      
+      // Ensure assigned branch is within actor's scope
+      if (branchContextId && String(normalizedAssignedBranch) !== String(branchContextId)) {
+        throw new AppError('Cannot assign staff to a branch outside your scope', 403);
+      }
+    }
+
+    // Validate posIds if provided
+    let normalizedPosIds = [];
+    if (posIds && posIds.length > 0) {
+      if (!normalizedAssignedBranch) {
+        throw new AppError('assignedBranchId is required when specifying POS terminals', 400);
+      }
+      // Validate that all POS terminals belong to the assigned branch
+      const PosTerminalRepo = require('../../pos/repository/posTerminal.repository');
+      for (const posId of posIds) {
+        const terminal = await PosTerminalRepo.findById(conn, posId);
+        if (!terminal) throw new AppError(`POS terminal ${posId} not found`, 404);
+        if (String(terminal.branchId) !== String(normalizedAssignedBranch)) {
+          throw new AppError(`POS terminal ${posId} does not belong to assigned branch`, 400);
+        }
+      }
+      normalizedPosIds = posIds;
+    }
 
     await ensureEmailAvailable(conn, email);
 
@@ -117,6 +147,8 @@ class StaffService {
       mustChangePassword: !password,
       roles: roles?.length ? roles : ['staff'],
       branchIds: normalizedBranches,
+      assignedBranchId: normalizedAssignedBranch || null,
+      posIds: normalizedPosIds,
       roleGrants: filteredGrants,
       isStaff: true,
       position: position || undefined,
@@ -193,6 +225,46 @@ class StaffService {
 
     const nextBranches = payload.branchIds ? await ensureBranchesExist(conn, payload.branchIds) : (userDoc.branchIds || []);
     guardBranchScope(actorDoc, context, nextBranches);
+
+    // Handle assignedBranchId update
+    if (payload.assignedBranchId !== undefined) {
+      if (payload.assignedBranchId) {
+        const validatedBranches = await ensureBranchesExist(conn, [payload.assignedBranchId], { required: true });
+        const normalizedAssignedBranch = validatedBranches[0];
+        
+        // Ensure assigned branch is within actor's scope
+        if (context && String(normalizedAssignedBranch) !== String(context)) {
+          throw new AppError('Cannot assign staff to a branch outside your scope', 403);
+        }
+        
+        userDoc.assignedBranchId = normalizedAssignedBranch;
+      } else {
+        userDoc.assignedBranchId = null;
+      }
+    }
+
+    // Handle posIds update
+    if (payload.posIds !== undefined) {
+      if (payload.posIds && payload.posIds.length > 0) {
+        const effectiveAssignedBranch = userDoc.assignedBranchId || payload.assignedBranchId;
+        if (!effectiveAssignedBranch) {
+          throw new AppError('assignedBranchId is required when specifying POS terminals', 400);
+        }
+        
+        // Validate that all POS terminals belong to the assigned branch
+        const PosTerminalRepo = require('../../pos/repository/posTerminal.repository');
+        for (const posId of payload.posIds) {
+          const terminal = await PosTerminalRepo.findById(conn, posId);
+          if (!terminal) throw new AppError(`POS terminal ${posId} not found`, 404);
+          if (String(terminal.branchId) !== String(effectiveAssignedBranch)) {
+            throw new AppError(`POS terminal ${posId} does not belong to assigned branch`, 400);
+          }
+        }
+        userDoc.posIds = payload.posIds;
+      } else {
+        userDoc.posIds = [];
+      }
+    }
 
     if (payload.email && payload.email !== userDoc.email) {
       await ensureEmailAvailable(conn, payload.email, id);
