@@ -71,7 +71,7 @@ router.use(tenantContext);
  *         $ref: '#/components/responses/ServerError'
  */
 router.post('/register-owner', validate(registerOwner), async (req, res, next) => {
-  try { const r = await TenantAuthService.registerOwner(req.tenantDb, req.body); return res.status(r.status).json(r); }
+  try { const r = await TenantAuthService.registerOwner(req.tenantDb, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
 
@@ -130,7 +130,7 @@ router.post('/register-owner', validate(registerOwner), async (req, res, next) =
  *         $ref: '#/components/responses/ValidationError'
  */
 router.post('/login', validate(login), async (req, res, next) => {
-  try { const r = await TenantAuthService.login(req.tenantDb, req.body); return res.status(r.status).json(r); }
+  try { const r = await TenantAuthService.login(req.tenantDb, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
 
@@ -191,7 +191,7 @@ router.post('/login', validate(login), async (req, res, next) => {
  *         $ref: '#/components/responses/ValidationError'
  */
 router.post('/login-pin', validate(loginPin), async (req, res, next) => {
-  try { const r = await TenantAuthService.loginWithPin(req.tenantDb, req.body); return res.status(r.status).json(r); }
+  try { const r = await TenantAuthService.loginWithPin(req.tenantDb, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
 
@@ -240,7 +240,7 @@ router.post('/login-pin', validate(loginPin), async (req, res, next) => {
  *         $ref: '#/components/responses/ValidationError'
  */
 router.post('/logout-pin', validate(logoutPin), async (req, res, next) => {
-  try { const r = await TenantAuthService.logoutWithPin(req.tenantDb, req.user, req.body); return res.status(r.status).json(r); }
+  try { const r = await TenantAuthService.logoutWithPin(req.tenantDb, req.user, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
 

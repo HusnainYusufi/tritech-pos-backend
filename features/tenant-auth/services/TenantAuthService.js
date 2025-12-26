@@ -31,10 +31,16 @@ const buildPinKey = (pin) => crypto.createHmac('sha256', PIN_PEPPER).update(Stri
 const comparePin = (pin, hash) => bcrypt.compare(String(pin) + PIN_PEPPER, hash);
 
 class TenantAuthService {
-  static signToken(payload){ return jwt.sign(payload, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` }); }
+  static signToken(payload) {
+    // Ensure tenantSlug is always included for tenant users
+    if (payload.tenant && !payload.tenantSlug) {
+      throw new Error('tenantSlug is required in JWT payload for tenant users');
+    }
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` });
+  }
 
   /** Admin-provisioned owner (Option A) */
-  static async registerOwner(conn, { fullName, email, password, roles, branchIds }) {
+  static async registerOwner(conn, { fullName, email, password, roles, branchIds }, tenantSlug) {
     const existing = await TenantUserRepo.getByEmail(conn, email);
     if (existing) throw new AppError('Email already in use', 409);
 
@@ -46,12 +52,18 @@ class TenantAuthService {
       status: 'active'
     });
 
-    const token = this.signToken({ tenant: true, email, uid: user._id.toString(), roles: user.roles });
+    const token = this.signToken({ 
+      tenant: true, 
+      tenantSlug: tenantSlug,
+      email, 
+      uid: user._id.toString(), 
+      roles: user.roles 
+    });
     return { status: 200, message: 'Tenant owner registered', result: { token, user } };
   }
 
   /** Login */
-  static async login(conn, { email, password, branchId, posId, defaultBranchId }) {
+  static async login(conn, { email, password, branchId, posId, defaultBranchId }, tenantSlug) {
     const userDoc = await TenantUserRepo.getDocByEmail(conn, email);
     if (!userDoc) throw new AppError('Invalid credentials', 401);
     if (userDoc.status !== 'active') throw new AppError('Account is not active', 403);
@@ -86,6 +98,7 @@ class TenantAuthService {
 
     const token = this.signToken({
       tenant: true,
+      tenantSlug: tenantSlug,
       uid: userDoc._id.toString(),
       email: userDoc.email,
       roles: userDoc.roles,
@@ -100,7 +113,7 @@ class TenantAuthService {
       user: { _id: userDoc._id, fullName: userDoc.fullName, email: userDoc.email, roles: userDoc.roles, branchIds: userDoc.branchIds } } };
   }
 
-  static async loginWithPin(conn, { pin }) {
+  static async loginWithPin(conn, { pin }, tenantSlug) {
     const pinKey = buildPinKey(pin);
     const User = TenantUserRepo.model(conn);
     const userDoc = await User.findOne({ pinKey });
@@ -168,6 +181,7 @@ class TenantAuthService {
 
     const token = this.signToken({
       tenant: true,
+      tenantSlug: tenantSlug,
       uid: userDoc._id.toString(),
       email: userDoc.email,
       roles: userDoc.roles,
@@ -195,7 +209,7 @@ class TenantAuthService {
     };
   }
 
-  static async logoutWithPin(conn, userContext, { declaredClosingAmount, systemClosingAmount, cashCounts, notes, branchId, posId, tillSessionId }) {
+  static async logoutWithPin(conn, userContext, { declaredClosingAmount, systemClosingAmount, cashCounts, notes, branchId, posId, tillSessionId }, tenantSlug) {
     const uid = userContext?.uid;
     if (!uid) throw new AppError('Unauthorized', 401);
 
@@ -258,6 +272,7 @@ class TenantAuthService {
 
     const token = this.signToken({
       tenant: true,
+      tenantSlug: tenantSlug,
       uid: userDoc._id.toString(),
       email: userDoc.email,
       roles: userDoc.roles,

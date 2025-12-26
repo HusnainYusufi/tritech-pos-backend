@@ -72,6 +72,7 @@ class PosTillService {
 
     const token = TenantAuthService.signToken({
       tenant: true,
+      tenantSlug: userContext.tenantSlug,
       uid: userDoc._id.toString(),
       email: userDoc.email,
       roles: userDoc.roles,
