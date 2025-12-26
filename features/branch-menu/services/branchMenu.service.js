@@ -264,33 +264,36 @@ class BranchMenuService {
       const masterBasePrice = m.pricing?.basePrice ?? null;
       const masterPriceIncludesTax = m.pricing?.priceIncludesTax ?? false;
 
+      // If there is no branch config, treat the item as NOT assigned to this branch.
+      const hasCfg = !!cfg;
+
       const effectivePrice =
-        cfg && cfg.sellingPrice !== null && typeof cfg.sellingPrice === 'number'
+        hasCfg && cfg.sellingPrice !== null && typeof cfg.sellingPrice === 'number'
           ? cfg.sellingPrice
           : masterBasePrice;
 
       const effectivePriceIncludesTax =
-        cfg && typeof cfg.priceIncludesTax === 'boolean'
+        hasCfg && typeof cfg.priceIncludesTax === 'boolean'
           ? cfg.priceIncludesTax
           : masterPriceIncludesTax;
 
       const effectiveIsAvailable =
-        cfg && typeof cfg.isAvailable === 'boolean'
+        hasCfg && typeof cfg.isAvailable === 'boolean'
           ? cfg.isAvailable
-          : !!m.isActive;
+          : false; // unassigned items are NOT available
 
       const effectiveIsVisibleInPOS =
-        cfg && typeof cfg.isVisibleInPOS === 'boolean'
+        hasCfg && typeof cfg.isVisibleInPOS === 'boolean'
           ? cfg.isVisibleInPOS
-          : true;
+          : false; // unassigned items are NOT visible in POS
 
       const effectiveIsVisibleInOnline =
-        cfg && typeof cfg.isVisibleInOnline === 'boolean'
+        hasCfg && typeof cfg.isVisibleInOnline === 'boolean'
           ? cfg.isVisibleInOnline
-          : true;
+          : false;
 
       const effectiveDisplayOrder =
-        cfg && typeof cfg.displayOrder === 'number'
+        hasCfg && typeof cfg.displayOrder === 'number'
           ? cfg.displayOrder
           : m.displayOrder || 0;
 
@@ -328,7 +331,8 @@ class BranchMenuService {
         items,
         page: menuSearch.page,
         limit: menuSearch.limit,
-        count: menuSearch.count,
+        // Count only items effectively available/visible for this branch (assigned)
+        count: items.length,
       },
     };
   }
