@@ -1,41 +1,8 @@
 // tests/unit/tenantResolver.test.js
-const { extractTenantFromEmail, resolveTenantSlug } = require('../../modules/tenantResolver');
+const { resolveTenantSlug } = require('../../modules/tenantResolver');
 const jwt = require('jsonwebtoken');
 
 describe('tenantResolver', () => {
-  describe('extractTenantFromEmail', () => {
-    it('should extract tenant from valid email', () => {
-      expect(extractTenantFromEmail('user@acme.com')).toBe('acme');
-      expect(extractTenantFromEmail('admin@downtown-cafe.com')).toBe('downtown-cafe');
-      expect(extractTenantFromEmail('cashier@store123.com')).toBe('store123');
-    });
-
-    it('should handle uppercase emails', () => {
-      expect(extractTenantFromEmail('USER@ACME.COM')).toBe('acme');
-      expect(extractTenantFromEmail('Admin@DownTown-Cafe.COM')).toBe('downtown-cafe');
-    });
-
-    it('should return null for invalid emails', () => {
-      expect(extractTenantFromEmail('invalid')).toBeNull();
-      expect(extractTenantFromEmail('user@')).toBeNull();
-      expect(extractTenantFromEmail('@acme.com')).toBeNull();
-      expect(extractTenantFromEmail('')).toBeNull();
-      expect(extractTenantFromEmail(null)).toBeNull();
-      expect(extractTenantFromEmail(undefined)).toBeNull();
-    });
-
-    it('should return null for invalid tenant slug format', () => {
-      expect(extractTenantFromEmail('user@invalid!domain.com')).toBeNull();
-      expect(extractTenantFromEmail('user@invalid space.com')).toBeNull();
-      expect(extractTenantFromEmail('user@invalid_underscore.com')).toBeNull();
-    });
-
-    it('should extract first part of subdomain', () => {
-      expect(extractTenantFromEmail('user@sub.domain.com')).toBe('sub');
-      expect(extractTenantFromEmail('user@api.acme.com')).toBe('api');
-    });
-  });
-
   describe('resolveTenantSlug', () => {
     const JWT_SECRET = process.env.JWT_SECRET_KEY || 'test-secret';
 
@@ -46,7 +13,7 @@ describe('tenantResolver', () => {
           'authorization': `Bearer ${token}`,
           'x-tenant-id': 'wrong-tenant'
         },
-        body: { email: 'user@wrong-tenant.com' },
+        body: { email: 'user@gmail.com' },
         hostname: 'wrong-tenant.com'
       };
 
@@ -54,20 +21,7 @@ describe('tenantResolver', () => {
       expect(result).toBe('acme');
     });
 
-    it('should extract tenant from email (priority 2)', async () => {
-      const req = {
-        headers: {
-          'x-tenant-id': 'wrong-tenant'
-        },
-        body: { email: 'user@acme.com' },
-        hostname: 'wrong-tenant.com'
-      };
-
-      const result = await resolveTenantSlug(req);
-      expect(result).toBe('acme');
-    });
-
-    it('should extract tenant from header (priority 3)', async () => {
+    it('should extract tenant from header (priority 2)', async () => {
       const req = {
         headers: {
           'x-tenant-id': 'acme'
@@ -80,7 +34,7 @@ describe('tenantResolver', () => {
       expect(result).toBe('acme');
     });
 
-    it('should extract tenant from subdomain (priority 4)', async () => {
+    it('should extract tenant from subdomain (priority 3)', async () => {
       const req = {
         headers: {},
         body: {},

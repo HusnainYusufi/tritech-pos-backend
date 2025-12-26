@@ -6,6 +6,7 @@ const crypto = require('crypto');
 
 const AppError = require('../../../modules/AppError');
 const TenantUserRepo = require('../../tenant-auth/repository/tenantUser.repository');
+const TenantUserDirectoryRepo = require('../../tenant-auth/repository/tenantUserDirectory.repository');
 const BranchRepo = require('../../branch/repository/branch.repository');
 
 const PIN_PEPPER = process.env.PIN_PEPPER || process.env.JWT_SECRET_KEY || 'pin-pepper';
@@ -88,7 +89,7 @@ async function getActor(conn, actorId) {
 }
 
 class StaffService {
-  static async create(conn, actorId, payload, branchContextId = null) {
+  static async create(conn, actorId, payload, branchContextId = null, tenantSlug = null) {
     const { fullName, email, password, branchIds, assignedBranchId, posIds, roles, roleGrants = [], pin, position, metadata } = payload;
 
     const actorDoc = await getActor(conn, actorId);
@@ -160,6 +161,15 @@ class StaffService {
       status: 'active'
     });
 
+    if (tenantSlug) {
+      await TenantUserDirectoryRepo.upsertByEmail({
+        email: doc.email,
+        tenantSlug,
+        tenantUserId: doc._id,
+        userType: 'staff'
+      });
+    }
+
     return { status: 200, message: 'Staff member created', result: sanitizeUser(doc) };
   }
 
@@ -214,7 +224,7 @@ class StaffService {
     return { status: 200, result: sanitizeUser(userDoc) };
   }
 
-  static async update(conn, actorId, id, payload, branchContextId = null) {
+  static async update(conn, actorId, id, payload, branchContextId = null, tenantSlug = null) {
     const context = branchContextId || payload.branchId || null;
     const actorDoc = await getActor(conn, actorId);
     ensureBranchContext(actorDoc, context);
@@ -266,7 +276,8 @@ class StaffService {
       }
     }
 
-    if (payload.email && payload.email !== userDoc.email) {
+    const emailChanged = payload.email && payload.email !== userDoc.email;
+    if (emailChanged) {
       await ensureEmailAvailable(conn, payload.email, id);
       userDoc.email = payload.email;
     }
@@ -283,6 +294,15 @@ class StaffService {
     }
 
     const saved = await userDoc.save();
+
+    if (tenantSlug && emailChanged) {
+      await TenantUserDirectoryRepo.upsertByEmail({
+        email: saved.email,
+        tenantSlug,
+        tenantUserId: saved._id,
+        userType: 'staff'
+      });
+    }
     return { status: 200, message: 'Staff updated', result: sanitizeUser(saved) };
   }
 

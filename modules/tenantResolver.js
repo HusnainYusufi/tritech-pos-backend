@@ -6,41 +6,12 @@ const logger = require('./logger');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 
-/**
- * Extract tenant slug from email domain
- * Examples:
- *   john@acme.com → acme
- *   admin@downtown-cafe.com → downtown-cafe
- *   user@sub.domain.com → sub
- * 
- * @param {string} email - Email address
- * @returns {string|null} - Tenant slug or null if invalid
- */
-function extractTenantFromEmail(email) {
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
-    return null;
-  }
-  
-  const parts = email.split('@');
-  if (parts.length !== 2) return null;
-  
-  const domain = parts[1];
-  if (!domain) return null;
-  
-  // Extract first part of domain as tenant slug
-  const tenantSlug = domain.split('.')[0].toLowerCase().trim();
-  
-  // Validate format (alphanumeric and hyphens only)
-  if (!/^[a-z0-9-]+$/.test(tenantSlug)) {
-    return null;
-  }
-  
-  return tenantSlug;
-}
+// NOTE: We intentionally do NOT derive tenant from email domain (e.g., gmail/outlook)
+// because that is not a reliable tenant identifier in real deployments.
 
 /**
  * Extract tenant from multiple sources with priority
- * Priority: JWT > Email > Header > Subdomain
+ * Priority: JWT > Header > Subdomain
  * 
  * @param {Object} req - Express request object
  * @returns {Promise<string|null>} - Tenant slug or null
@@ -66,23 +37,14 @@ async function resolveTenantSlug(req) {
     }
   }
   
-  // Priority 2: Email (for login endpoints)
-  if (req.body && req.body.email) {
-    tenantSlug = extractTenantFromEmail(req.body.email);
-    if (tenantSlug) {
-      logger.info('[tenantResolver] Resolved from email', { email: req.body.email, tenantSlug });
-      return tenantSlug;
-    }
-  }
-  
-  // Priority 3: x-tenant-id header (public endpoints)
+  // Priority 2: x-tenant-id header (public endpoints / legacy clients)
   if (req.headers['x-tenant-id']) {
     tenantSlug = String(req.headers['x-tenant-id']).toLowerCase().trim();
     logger.info('[tenantResolver] Resolved from x-tenant-id header', { tenantSlug });
     return tenantSlug;
   }
   
-  // Priority 4: Subdomain (web apps)
+  // Priority 3: Subdomain (web apps)
   if (req.hostname && req.hostname.includes('.')) {
     tenantSlug = req.hostname.split('.')[0].toLowerCase();
     logger.info('[tenantResolver] Resolved from subdomain', { hostname: req.hostname, tenantSlug });
@@ -94,7 +56,6 @@ async function resolveTenantSlug(req) {
 }
 
 module.exports = {
-  extractTenantFromEmail,
   resolveTenantSlug
 };
 

@@ -27,7 +27,7 @@ module.exports = (Schema) => {
   }, { timestamps: true });
 
   InventoryItemSchema.index({ name: 1 });
-  InventoryItemSchema.index({ sku: 1 }, { unique: true });
+  // NOTE: sku already has { unique: true } at field level; avoid duplicate index definitions.
 
   return InventoryItemSchema;
 };

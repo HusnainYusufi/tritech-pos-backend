@@ -43,7 +43,7 @@ module.exports = (Schema) => {
     resetTokenExpiresAt: { type: Date, default: null },
   }, { timestamps: true });
 
-  TenantUserSchema.index({ email: 1 }, { unique: true });
+  // NOTE: email already has { unique: true } at field level; avoid duplicate index definitions.
   TenantUserSchema.index({ pinKey: 1 }, { unique: true, sparse: true });
   TenantUserSchema.index({ assignedBranchId: 1, isStaff: 1 });
   return TenantUserSchema;

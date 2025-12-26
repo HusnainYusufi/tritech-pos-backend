@@ -91,7 +91,7 @@ router.post('/',
   validate(createStaff),
   async (req, res, next) => {
     try {
-      const r = await StaffService.create(req.tenantDb, req.user?.uid, req.body, branchContext(req));
+      const r = await StaffService.create(req.tenantDb, req.user?.uid, req.body, branchContext(req), req.tenantSlug);
       return res.status(r.status).json(r);
     } catch (e) { logger.error(e); next(e); }
   }
@@ -272,7 +272,7 @@ router.put('/:id',
   validate(updateStaff),
   async (req, res, next) => {
     try {
-      const r = await StaffService.update(req.tenantDb, req.user?.uid, req.params.id, req.body, branchContext(req));
+      const r = await StaffService.update(req.tenantDb, req.user?.uid, req.params.id, req.body, branchContext(req), req.tenantSlug);
       return res.status(r.status).json(r);
     } catch (e) { logger.error(e); next(e); }
   }

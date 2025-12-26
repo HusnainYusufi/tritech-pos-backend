@@ -5,6 +5,7 @@ const Tenant = require('../features/tenant/model/Tenant.model');
 const { getTenantConnection } = require('../modules/connectionManager');
 const TenantRoleService = require('../features/tenant-rbac/services/TenantRoleService');
 const { resolveTenantSlug } = require('../modules/tenantResolver');
+const TenantUserDirectoryRepo = require('../features/tenant-auth/repository/tenantUserDirectory.repository');
 
 /**
  * Smart tenant resolution middleware
@@ -18,8 +19,18 @@ async function tenantContext(req, res, next) {
   const logger = require('../modules/logger');
   
   try {
-    // Smart tenant resolution (JWT > Email > Header > Subdomain)
-    const tenantSlug = await resolveTenantSlug(req);
+    // Smart tenant resolution (JWT > Header > Subdomain)
+    let tenantSlug = await resolveTenantSlug(req);
+
+    // If still unknown, try resolving via MAIN-DB directory (email -> tenantSlug).
+    // This enables /t/auth/login, /t/auth/forgot-password etc for users with gmail/outlook emails.
+    if (!tenantSlug && req.body && req.body.email) {
+      const hit = await TenantUserDirectoryRepo.findByEmail(req.body.email);
+      if (hit?.tenantSlug) {
+        tenantSlug = hit.tenantSlug;
+        logger.info('[tenantContext] Resolved tenant from directory', { email: req.body.email, tenantSlug });
+      }
+    }
     
     if (!tenantSlug) {
       logger.warn('[tenantContext] Missing tenant identifier', {
@@ -30,7 +41,7 @@ async function tenantContext(req, res, next) {
       });
       return res.status(400).json({
         status: 400,
-        message: 'Missing tenant identifier. Provide email, x-tenant-id header, or use tenant subdomain.',
+        message: 'Missing tenant identifier. Provide x-tenant-id header, use tenant subdomain, or ensure email exists in tenant directory.',
       });
     }
 

@@ -24,7 +24,7 @@ try {
     resetTokenExpiresAt: { type: Date, default: null },
   }, { timestamps: true });
 
-  UserSchema.index({ email: 1 }, { unique: true });
+  // NOTE: email already has { unique: true } at field level; avoid duplicate index definitions.
 
   const User = mongoose.model('User', UserSchema);
   module.exports = User;

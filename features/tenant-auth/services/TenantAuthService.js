@@ -6,6 +6,7 @@ const AppError = require('../../../modules/AppError');
 const logger = require('../../../modules/logger');
 const TenantUserRepo = require('../repository/tenantUser.repository');
 const TillSessionRepo = require('../repository/tillSession.repository');
+const TenantUserDirectoryRepo = require('../repository/tenantUserDirectory.repository');
 const { sendEmail } = require('../../../modules/helper');
 const { hasTenantScope, branchGuard, posGuard } = require('./tenantGuards');
 const PosTerminalService = require('../../pos/services/PosTerminalService');
@@ -50,6 +51,14 @@ class TenantAuthService {
       roles: roles?.length ? roles : ['owner'],
       branchIds: branchIds || [],
       status: 'active'
+    });
+
+    // Main-DB directory entry: email -> tenantSlug (so gmail/outlook logins can resolve tenant)
+    await TenantUserDirectoryRepo.upsertByEmail({
+      email,
+      tenantSlug,
+      tenantUserId: user._id,
+      userType: 'owner'
     });
 
     const token = this.signToken({ 
