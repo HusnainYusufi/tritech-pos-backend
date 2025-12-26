@@ -8,6 +8,9 @@ const { buildWelcomeEmailTemplate } = require('../../../modules/emailTemplates')
 const TenantRoleService = require('../../tenant-rbac/services/TenantRoleService');
 const { buildTenantDbUri } = require('../../../modules/mongoUri');
 
+// main DB directory: email -> tenantSlug (needed for login without x-tenant-id)
+const TenantUserDirectoryRepo = require('../../tenant-auth/repository/tenantUserDirectory.repository');
+
 
 // for seeding Owner user + invite
 const bcrypt = require('bcryptjs');
@@ -73,19 +76,20 @@ class TenantService {
       // if user already exists (rare), refresh token; else create new
       const existing = await TenantUser.findOne({ email: data.contactEmail });
       const token = crypto.randomBytes(24).toString('hex');
+      let ownerDoc;
 
       if (existing) {
         existing.resetToken = token;
         existing.resetTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         existing.mustChangePassword = true;
         existing.status = 'active';
-        await existing.save();
+        ownerDoc = await existing.save();
       } else {
         // temp random password (will be replaced on accept-invite)
         const randomPass = crypto.randomBytes(12).toString('hex');
         const passwordHash = await bcrypt.hash(randomPass, 10);
 
-        await TenantUser.create({
+        ownerDoc = await TenantUser.create({
           fullName: `${data.name} Owner`,
           email: data.contactEmail,
           roles: ['owner'],
@@ -95,6 +99,17 @@ class TenantService {
           status: 'active',
           resetToken: token,
           resetTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+        });
+      }
+
+      // Ensure login WITHOUT x-tenant-id works (gmail/outlook supported)
+      // by keeping a main-DB mapping: email -> tenantSlug
+      if (ownerDoc?._id) {
+        await TenantUserDirectoryRepo.upsertByEmail({
+          email: data.contactEmail,
+          tenantSlug: slug,
+          tenantUserId: ownerDoc._id,
+          userType: 'owner'
         });
       }
 
