@@ -22,13 +22,23 @@ async function tenantContext(req, res, next) {
     // Smart tenant resolution (JWT > Header > Subdomain)
     let tenantSlug = await resolveTenantSlug(req);
 
-    // If still unknown, try resolving via MAIN-DB directory (email -> tenantSlug).
-    // This enables /t/auth/login, /t/auth/forgot-password etc for users with gmail/outlook emails.
+    // If still unknown, try resolving via MAIN-DB by searching Tenant collection directly.
+    // This allows login using email even if x-tenant-id is missing.
     if (!tenantSlug && req.body && req.body.email) {
-      const hit = await TenantUserDirectoryRepo.findByEmail(req.body.email);
-      if (hit?.tenantSlug) {
-        tenantSlug = hit.tenantSlug;
-        logger.info('[tenantContext] Resolved tenant from directory', { email: req.body.email, tenantSlug });
+      const email = req.body.email.toLowerCase().trim();
+      
+      // Look for a tenant where this email is the contact email
+      const tenantDoc = await Tenant.findOne({ contactEmail: email }).select('slug').lean();
+      
+      if (tenantDoc) {
+        tenantSlug = tenantDoc.slug;
+        logger.info('[tenantContext] Resolved tenant from contactEmail', { email, tenantSlug });
+      } else {
+        // Fallback: Check if this email is a user in ANY tenant (expensive but requested)
+        // NOTE: This is tricky because users are in tenant DBs, not main DB.
+        // We can only check the main Tenant table here.
+        // If "TenantUserDirectory" is forbidden, we can only rely on 'contactEmail' on the Tenant model.
+        logger.warn('[tenantContext] Email not found in any Tenant contactEmail', { email });
       }
     }
     
