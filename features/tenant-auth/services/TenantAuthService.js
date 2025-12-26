@@ -100,8 +100,7 @@ class TenantAuthService {
       user: { _id: userDoc._id, fullName: userDoc.fullName, email: userDoc.email, roles: userDoc.roles, branchIds: userDoc.branchIds } } };
   }
 
-  static async loginWithPin(conn, { pin, branchId, posId, defaultBranchId }) {
-    const normalizedBranchId = branchId || null;
+  static async loginWithPin(conn, { pin }) {
     const pinKey = buildPinKey(pin);
     const User = TenantUserRepo.model(conn);
     const userDoc = await User.findOne({ pinKey });
@@ -126,27 +125,33 @@ class TenantAuthService {
       throw new AppError('Invalid credentials', 401);
     }
 
-    const branchIds = (userDoc.branchIds || []).map(String);
-    let effectiveBranch = normalizedBranchId;
-    if (effectiveBranch) branchGuard(userDoc, effectiveBranch);
-    if (!effectiveBranch) {
-      if (!hasTenantScope(userDoc)) {
-        if (branchIds.length === 1) {
-          effectiveBranch = branchIds[0];
-        } else {
-          throw new AppError('branchId is required for branch-scoped staff', 400);
-        }
-      }
+    // 🔒 SECURITY: Cashier must have an assigned branch
+    if (!userDoc.assignedBranchId) {
+      throw new AppError('Cashier is not assigned to any branch. Please contact your manager.', 403);
     }
 
-    if (!effectiveBranch) throw new AppError('branchId is required for branch-scoped staff', 400);
+    const effectiveBranch = String(userDoc.assignedBranchId);
+    
+    // Determine POS terminal assignment
+    let effectivePosId = null;
+    let terminal = null;
+    const posIds = (userDoc.posIds || []).map(String);
 
-    // Validate POS terminal access (Option 3: Hybrid approach)
-    // If posIds is empty, cashier can use any POS in their branch
-    // If posIds has values, cashier is restricted to those specific POS terminals
-    posGuard(userDoc, posId);
-
-    const terminal = await PosTerminalService.getActiveInBranch(conn, effectiveBranch, posId);
+    if (posIds.length === 1) {
+      // Single POS assigned - auto-login to that POS
+      effectivePosId = posIds[0];
+      terminal = await PosTerminalService.getActiveInBranch(conn, effectiveBranch, effectivePosId);
+    } else if (posIds.length > 1) {
+      // Multiple POS assigned - cashier needs to select (frontend will handle this)
+      // We'll return the list of available POS terminals
+      effectivePosId = null;
+      terminal = null;
+    } else {
+      // No POS restrictions - cashier can use any POS in their branch
+      // Frontend will need to show POS selection
+      effectivePosId = null;
+      terminal = null;
+    }
 
     userDoc.pinLoginFailures = 0;
     userDoc.pinLockedUntil = null;
@@ -154,16 +159,23 @@ class TenantAuthService {
     userDoc.lastLoginAt = now;
     await userDoc.save();
 
+    // Get available POS terminals for this cashier
+    const availableTerminals = await PosTerminalService.getAvailableForCashier(
+      conn, 
+      effectiveBranch, 
+      posIds
+    );
+
     const token = this.signToken({
       tenant: true,
       uid: userDoc._id.toString(),
       email: userDoc.email,
       roles: userDoc.roles,
       branchIds: userDoc.branchIds,
-      branchId: effectiveBranch || null,
-      posId: posId || null,
+      branchId: effectiveBranch,
+      posId: effectivePosId,
       posName: terminal?.name || null,
-      defaultBranchId: defaultBranchId || effectiveBranch || null,
+      defaultBranchId: effectiveBranch,
       tillSessionId: null
     });
 
@@ -173,7 +185,11 @@ class TenantAuthService {
       result: {
         token,
         user: sanitizeUser(userDoc),
-        branchId: effectiveBranch || null,
+        branchId: effectiveBranch,
+        posId: effectivePosId,
+        posName: terminal?.name || null,
+        requiresPosSelection: !effectivePosId, // true if cashier needs to select POS
+        availableTerminals: availableTerminals || [], // List of POS terminals cashier can use
         tillSessionId: null
       }
     };
