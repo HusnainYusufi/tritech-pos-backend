@@ -47,10 +47,16 @@ async function resolveTenantSlug(req) {
   
   // Priority 3: Subdomain (web apps)
   // Ensure it's not an IP address (e.g. 192.168.1.1 would otherwise parse as tenant "192")
+  // Also block common API path segments that might be mistaken for subdomains in some proxy setups
   if (req.hostname && req.hostname.includes('.') && net.isIP(req.hostname) === 0) {
-    tenantSlug = req.hostname.split('.')[0].toLowerCase();
-    logger.info('[tenantResolver] Resolved from subdomain', { hostname: req.hostname, tenantSlug });
-    return tenantSlug;
+    const candidate = req.hostname.split('.')[0].toLowerCase();
+    
+    // IGNORE 'api' or 'www' or 'admin' if they appear as the first segment
+    if (candidate !== 'api' && candidate !== 'www' && candidate !== 'admin') {
+      tenantSlug = candidate;
+      logger.info('[tenantResolver] Resolved from subdomain', { hostname: req.hostname, tenantSlug });
+      return tenantSlug;
+    }
   }
   
   logger.warn('[tenantResolver] Could not resolve tenant from any source');
