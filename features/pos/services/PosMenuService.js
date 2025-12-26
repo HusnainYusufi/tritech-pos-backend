@@ -14,9 +14,13 @@ class PosMenuService {
       q,
       page,
       limit,
-      includeUnavailable = false,
-      includeHidden = false,
+      includeUnavailable,
+      includeHidden,
     } = query;
+
+    // Coerce boolean-ish query params (because validate middleware does not mutate req.query)
+    const includeUnavailableFlag = includeUnavailable === true || includeUnavailable === 'true';
+    const includeHiddenFlag = includeHidden === true || includeHidden === 'true';
 
     const uid = userContext?.uid;
     if (!uid) throw new AppError('Unauthorized', 401);
@@ -44,7 +48,7 @@ class PosMenuService {
     const filteredItems = rawItems.filter((item) => {
       const isVisible = item?.effective?.isVisibleInPOS !== false;
       const isAvailable = item?.effective?.isAvailable !== false;
-      return (includeHidden || isVisible) && (includeUnavailable || isAvailable);
+      return (includeHiddenFlag || isVisible) && (includeUnavailableFlag || isAvailable);
     });
 
     const simplifiedItems = filteredItems.map((item) => {
