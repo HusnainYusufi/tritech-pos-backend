@@ -16,6 +16,7 @@
  */
 
 const mongoose = require('mongoose');
+require('dotenv').config();
 const { withAuthSource } = require('../../modules/mongoUri');
 const Tenant = require('../../features/tenant/model/Tenant.model');
 const { getTenantConnection, clearTenantConnection } = require('../../modules/connectionManager');

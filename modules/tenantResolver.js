@@ -3,6 +3,7 @@
 
 const jwt = require('jsonwebtoken');
 const logger = require('./logger');
+const net = require('net');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 
@@ -45,7 +46,8 @@ async function resolveTenantSlug(req) {
   }
   
   // Priority 3: Subdomain (web apps)
-  if (req.hostname && req.hostname.includes('.')) {
+  // Ensure it's not an IP address (e.g. 192.168.1.1 would otherwise parse as tenant "192")
+  if (req.hostname && req.hostname.includes('.') && net.isIP(req.hostname) === 0) {
     tenantSlug = req.hostname.split('.')[0].toLowerCase();
     logger.info('[tenantResolver] Resolved from subdomain', { hostname: req.hostname, tenantSlug });
     return tenantSlug;
