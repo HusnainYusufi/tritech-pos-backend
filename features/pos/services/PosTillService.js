@@ -96,7 +96,7 @@ class PosTillService {
     };
   }
 
-  static async closeTill(conn, userContext, { declaredClosingAmount, systemClosingAmount, cashCounts, notes, branchId, posId, tillSessionId }) {
+  static async closeTill(conn, userContext, { declaredClosingAmount, systemClosingAmount, cashCounts, notes, branchId, posId, tillSessionId }, tenantSlug) {
     const uid = userContext?.uid;
     if (!uid) throw new AppError('Unauthorized', 401);
 
@@ -159,6 +159,7 @@ class PosTillService {
 
     const token = TenantAuthService.signToken({
       tenant: true,
+      tenantSlug: tenantSlug || userContext.tenantSlug,
       uid: userDoc._id.toString(),
       email: userDoc.email,
       roles: userDoc.roles,

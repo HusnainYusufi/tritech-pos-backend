@@ -175,7 +175,7 @@ router.post('/till/close',
   validate(closeTill),
   async (req, res, next) => {
     try {
-      const r = await PosTillService.closeTill(req.tenantDb, req.user, req.body);
+      const r = await PosTillService.closeTill(req.tenantDb, req.user, req.body, req.tenantSlug);
       return res.status(r.status).json(r);
     } catch (e) { logger.error(e); next(e); }
   }
