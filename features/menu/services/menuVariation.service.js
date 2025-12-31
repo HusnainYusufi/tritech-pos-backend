@@ -148,6 +148,29 @@ class MenuVariationService {
       metadata: d.metadata || {}
     });
 
+    // ✅ CRITICAL FIX: Auto-populate MenuItem.variants[] array for bidirectional linking
+    // This ensures MenuItem.variants[] stays in sync with MenuVariation.menuItemId
+    try {
+      await ItemRepo.model(conn).findByIdAndUpdate(
+        d.menuItemId,
+        { $addToSet: { variants: doc._id } },
+        { new: false } // Don't need the updated doc, just fire and continue
+      );
+      
+      logger.info('[MenuVariation] Auto-linked to MenuItem.variants[]', {
+        variationId: doc._id,
+        menuItemId: d.menuItemId,
+        variationName: doc.name
+      });
+    } catch (linkError) {
+      // Non-fatal: Log but don't fail the creation
+      logger.error('[MenuVariation] Failed to auto-link to MenuItem.variants[]', {
+        variationId: doc._id,
+        menuItemId: d.menuItemId,
+        error: linkError.message
+      });
+    }
+
     logger.info('[MenuVariation] Created successfully', {
       variationId: doc._id,
       menuItemId: d.menuItemId,
@@ -248,8 +271,36 @@ class MenuVariationService {
   }
 
   static async del(conn, id) {
-    const doc = await Repo.deleteById(conn, id);
+    const doc = await Repo.getById(conn, id);
     if (!doc) throw new AppError('Menu variation not found', 404);
+
+    const menuItemId = doc.menuItemId;
+
+    // Delete the variation
+    await Repo.deleteById(conn, id);
+
+    // ✅ CRITICAL FIX: Remove from MenuItem.variants[] array to maintain bidirectional sync
+    try {
+      await ItemRepo.model(conn).findByIdAndUpdate(
+        menuItemId,
+        { $pull: { variants: id } },
+        { new: false }
+      );
+
+      logger.info('[MenuVariation] Auto-unlinked from MenuItem.variants[]', {
+        variationId: id,
+        menuItemId,
+        variationName: doc.name
+      });
+    } catch (unlinkError) {
+      // Non-fatal: Log but don't fail the deletion
+      logger.error('[MenuVariation] Failed to auto-unlink from MenuItem.variants[]', {
+        variationId: id,
+        menuItemId,
+        error: unlinkError.message
+      });
+    }
+
     return { status: 200, message: 'Menu variation deleted' };
   }
 }

@@ -31,9 +31,14 @@ module.exports = (Schema) => {
     branchIds: { type: [Schema.Types.ObjectId], default: [] },
     metadata: { type: Object, default: {} },
 
-    // Variants and Add-ons
+    // ✅ PRODUCTION-GRADE LINKING:
+    // Variations: Item-specific (managed via MenuVariation.menuItemId + MenuItem.variants[])
     variants: [{ type: Schema.Types.ObjectId, ref: 'MenuVariation' }],
-    addOns: [{ type: Schema.Types.ObjectId, ref: 'AddOn' }],
+    
+    // ✅ Add-ons: Category-based (managed via AddOnGroup.categoryId)
+    // Add-ons are fetched by MenuItem.categoryId → AddOnGroup → AddOnItem
+    // This matches industry standards (McDonald's, Domino's, etc.)
+    // Removed: addOns[] field (was referencing non-existent 'AddOn' model)
   }, { timestamps: true });
 
   MenuItemSchema.index({ name: 1 });
