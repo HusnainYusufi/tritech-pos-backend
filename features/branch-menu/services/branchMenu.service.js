@@ -5,6 +5,9 @@ const AppError = require('../../../modules/AppError');
 const BranchRepo = require('../../branch/repository/branch.repository');
 const MenuItemRepo = require('../../menu/repository/menuItem.repository');
 const BranchMenuRepo = require('../repository/branchMenu.repository');
+const MenuVariationRepo = require('../../menu/repository/menuVariation.repository');
+const AddOnGroupRepo = require('../../addons/repository/addOnGroup.repository');
+const AddOnItemRepo = require('../../addons/repository/addOnItem.repository');
 
 class BranchMenuService {
   /**
@@ -252,7 +255,101 @@ class BranchMenuService {
     }
 
     const menuItemIds = menuItems.map((m) => m._id);
-    const configs = await BranchMenuRepo.listByBranchAndMenuItemIds(conn, branchId, menuItemIds);
+
+    // Fetch branch configs + variation/add-on definitions in parallel to keep the POS payload rich
+    const [configs, menuVariations] = await Promise.all([
+      BranchMenuRepo.listByBranchAndMenuItemIds(conn, branchId, menuItemIds),
+      MenuVariationRepo.model(conn)
+        .find({ menuItemId: { $in: menuItemIds }, isActive: true })
+        .sort({ displayOrder: 1, name: 1 })
+        .lean(),
+    ]);
+
+    // Build variation map keyed by menuItemId for quick lookup
+    const variationMap = new Map();
+    for (const v of menuVariations) {
+      const key = String(v.menuItemId);
+      if (!variationMap.has(key)) variationMap.set(key, []);
+      variationMap.get(key).push({
+        id: v._id,
+        menuItemId: v.menuItemId,
+        recipeVariantId: v.recipeVariantId || null,
+        name: v.name,
+        type: v.type,
+        priceDelta: v.priceDelta || 0,
+        sizeMultiplier: v.sizeMultiplier || 1,
+        costDelta: v.costDelta || 0,
+        calculatedCost: v.calculatedCost || 0,
+        crustType: v.crustType || '',
+        flavorTag: v.flavorTag || '',
+        ingredients: v.ingredients || [],
+        isDefault: !!v.isDefault,
+        isActive: v.isActive !== false,
+        displayOrder: v.displayOrder || 0,
+        metadata: v.metadata || {},
+      });
+    }
+
+    // Fetch add-on groups/items per category (category-based assignment is how the system currently links add-ons)
+    const categoryIds = menuItems
+      .map((m) => m.categoryId?._id || m.categoryId || null)
+      .filter(Boolean);
+
+    let addOnGroups = [];
+    let addOnItems = [];
+
+    if (categoryIds.length) {
+      addOnGroups = await AddOnGroupRepo.model(conn)
+        .find({ categoryId: { $in: categoryIds }, isActive: true })
+        .sort({ displayOrder: 1, name: 1 })
+        .lean();
+
+      const addOnGroupIds = addOnGroups.map((g) => g._id);
+      if (addOnGroupIds.length) {
+        addOnItems = await AddOnItemRepo.model(conn)
+          .find({ groupId: { $in: addOnGroupIds }, isActive: true })
+          .sort({ displayOrder: 1, nameSnapshot: 1 })
+          .lean();
+      }
+    }
+
+    // Map add-on items into their groups, and groups by category for quick attachment
+    const addOnItemsByGroup = new Map();
+    for (const item of addOnItems) {
+      const key = String(item.groupId);
+      if (!addOnItemsByGroup.has(key)) addOnItemsByGroup.set(key, []);
+      addOnItemsByGroup.get(key).push({
+        id: item._id,
+        groupId: item.groupId,
+        categoryId: item.categoryId,
+        sourceType: item.sourceType,
+        sourceId: item.sourceId,
+        name: item.nameSnapshot,
+        price: item.price || 0,
+        unit: item.unit || 'unit',
+        isRequired: !!item.isRequired,
+        isActive: item.isActive !== false,
+        displayOrder: item.displayOrder || 0,
+        metadata: item.metadata || {},
+      });
+    }
+
+    const addOnGroupsByCategory = new Map();
+    for (const g of addOnGroups) {
+      const catKey = String(g.categoryId);
+      if (!addOnGroupsByCategory.has(catKey)) addOnGroupsByCategory.set(catKey, []);
+      const groupItems = addOnItemsByGroup.get(String(g._id)) || [];
+      addOnGroupsByCategory.get(catKey).push({
+        id: g._id,
+        categoryId: g.categoryId,
+        name: g.name,
+        description: g.description || '',
+        isActive: g.isActive !== false,
+        displayOrder: g.displayOrder || 0,
+        metadata: g.metadata || {},
+        items: groupItems,
+      });
+    }
 
     const configMap = new Map(
       configs.map((c) => [String(c.menuItemId), c])
@@ -297,6 +394,10 @@ class BranchMenuService {
           ? cfg.displayOrder
           : m.displayOrder || 0;
 
+      const variationsForItem = variationMap.get(String(m._id)) || [];
+      const addOnsForItem =
+        addOnGroupsByCategory.get(String(m.categoryId?._id || m.categoryId || '')) || [];
+
       return {
         branchId,
         branch: branchSnapshot,
@@ -312,6 +413,8 @@ class BranchMenuService {
           isActive: m.isActive,
         },
         branchConfig: cfg,
+        variations: variationsForItem,
+        addOns: addOnsForItem,
         effective: {
           price: effectivePrice,
           priceIncludesTax: effectivePriceIncludesTax,
