@@ -57,6 +57,63 @@ class PosMenuService {
       const categoryName = categoryRef?.name || item.branchConfig?.categoryNameSnapshot || null;
       const categorySlug = categoryRef?.slug || item.branchConfig?.categorySlugSnapshot || null;
 
+      const variations = (item.variations || [])
+        .filter((v) => v && v.isActive !== false)
+        .sort((a, b) => {
+          if ((a.displayOrder || 0) !== (b.displayOrder || 0)) {
+            return (a.displayOrder || 0) - (b.displayOrder || 0);
+          }
+          return (a.name || '').localeCompare(b.name || '');
+        })
+        .map((v) => ({
+          id: v.id || v._id,
+          name: v.name,
+          type: v.type,
+          priceDelta: v.priceDelta || 0,
+          sizeMultiplier: v.sizeMultiplier || 1,
+          recipeVariantId: v.recipeVariantId || null,
+          isDefault: !!v.isDefault,
+          displayOrder: v.displayOrder || 0,
+          metadata: v.metadata || {},
+        }));
+
+      const addOnGroups = (item.addOns || [])
+        .filter((g) => g && g.isActive !== false)
+        .sort((a, b) => {
+          if ((a.displayOrder || 0) !== (b.displayOrder || 0)) {
+            return (a.displayOrder || 0) - (b.displayOrder || 0);
+          }
+          return (a.name || '').localeCompare(b.name || '');
+        })
+        .map((g) => {
+          const groupItems = (g.items || [])
+            .filter((ai) => ai && ai.isActive !== false)
+            .sort((a, b) => {
+              if ((a.displayOrder || 0) !== (b.displayOrder || 0)) {
+                return (a.displayOrder || 0) - (b.displayOrder || 0);
+              }
+              return (a.name || '').localeCompare(b.name || '');
+            })
+            .map((ai) => ({
+              id: ai.id || ai._id,
+              name: ai.name,
+              price: ai.price || 0,
+              unit: ai.unit || 'unit',
+              isRequired: !!ai.isRequired,
+              displayOrder: ai.displayOrder || 0,
+              metadata: ai.metadata || {},
+            }));
+
+          return {
+            id: g.id || g._id,
+            name: g.name,
+            description: g.description || '',
+            displayOrder: g.displayOrder || 0,
+            items: groupItems,
+            metadata: g.metadata || {},
+          };
+        });
+
       return {
         id: item.menuItemId,
         name: item.menuItem?.name || item.branchConfig?.menuItemNameSnapshot || null,
@@ -73,6 +130,8 @@ class PosMenuService {
         displayOrder: item.effective?.displayOrder ?? 0,
         labels: item.branchConfig?.labels || [],
         metadata: item.branchConfig?.metadata || {},
+        variations,
+        addOns: addOnGroups,
       };
     });
 

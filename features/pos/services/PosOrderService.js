@@ -72,10 +72,25 @@ class PosOrderService {
     // Price items
     const pricedItems = await this._priceItems(conn, effectiveBranchId, items);
 
-    // Calculate totals
+    // Calculate totals with payment-method-based tax override
     const subTotal = pricedItems.reduce((acc, line) => acc + (line.lineTotal || 0), 0);
-    const taxRate = branchDoc.tax?.rate || 0;
-    const taxTotal = branchDoc.tax?.mode === 'exclusive' ? (subTotal * taxRate / 100) : 0;
+
+    // Payment method specific tax rules (business rule)
+    const paymentTaxRate =
+      paymentMethod === 'card'
+        ? 16
+        : paymentMethod === 'cash'
+          ? 5
+          : null; // fallback to branch tax if not cash/card
+
+    const effectiveTaxRate = typeof paymentTaxRate === 'number'
+      ? paymentTaxRate
+      : (branchDoc.tax?.rate || 0);
+
+    const effectiveTaxMode = branchDoc.tax?.mode || 'exclusive';
+    const taxTotal = effectiveTaxMode === 'exclusive'
+      ? (subTotal * effectiveTaxRate / 100)
+      : 0; // leaving inclusive behavior unchanged
     const discount = 0; // TODO: Add discount logic
     const grandTotal = subTotal + taxTotal - discount;
 
@@ -110,8 +125,8 @@ class PosOrderService {
       pricingSnapshot: {
         currency: branchDoc.currency || 'SAR',
         priceIncludesTax: pricedItems.some((i) => i.priceIncludesTax),
-        taxMode: branchDoc.tax?.mode || 'exclusive',
-        taxRate,
+        taxMode: effectiveTaxMode,
+        taxRate: effectiveTaxRate,
       },
       createdBy: uid,
     });
