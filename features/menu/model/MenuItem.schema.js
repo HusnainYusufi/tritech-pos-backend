@@ -31,9 +31,22 @@ module.exports = (Schema) => {
     branchIds: { type: [Schema.Types.ObjectId], default: [] },
     metadata: { type: Object, default: {} },
 
-    // Variants and Add-ons
+    // ✅ PRODUCTION-GRADE LINKING ARCHITECTURE:
+    // 
+    // VARIATIONS: Item-specific (1:N relationship)
+    // - MenuVariation.menuItemId → MenuItem._id
+    // - MenuItem.variants[] ← Auto-populated by MenuVariationService
+    // - Used for: Size options (Small/Medium/Large), Crust types, Flavors
     variants: [{ type: Schema.Types.ObjectId, ref: 'MenuVariation' }],
-    addOns: [{ type: Schema.Types.ObjectId, ref: 'AddOn' }],
+    
+    // ADD-ONS: Category-based (Industry Standard Pattern)
+    // - MenuItem.categoryId → MenuCategory._id → AddOnGroup.categoryId → AddOnItem
+    // - All items in same category share add-on groups
+    // - Used for: Toppings, Sauces, Extras, Sides
+    // - Matches: McDonald's, Domino's, Subway patterns
+    // 
+    // Note: Removed broken 'addOns' field (referenced non-existent 'AddOn' model)
+    // Add-ons are now fetched dynamically by category in POS menu service
   }, { timestamps: true });
 
   MenuItemSchema.index({ name: 1 });
