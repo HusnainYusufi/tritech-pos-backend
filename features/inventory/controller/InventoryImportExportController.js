@@ -132,10 +132,14 @@ router.get('/items/export',
  *       Bulk import inventory items from CSV or Excel file.
  *       
  *       **Import Options:**
- *       - `autoCreateCategories`: Automatically create missing categories
+ *       - `autoCreateCategories`: Automatically create missing categories (default: true)
  *       - `duplicatePolicy`: How to handle existing items
  *         - `skip`: Skip duplicate items
  *         - `update`: Update existing items with new data
+ *       
+ *       **Categories in the same file:**
+ *       - Provide `Category Name` for each row.
+ *       - If a category does not exist and `autoCreateCategories` is true, it is created and immediately used for that item.
  *       
  *       **Process:**
  *       1. Upload CSV/XLSX file

@@ -7,6 +7,7 @@ const AppError = require('../../../modules/AppError');
 
 const CategoryRepo = require('../../inventory-category/repository/inventoryCategory.repository');
 const ItemRepo = require('../repository/inventoryItem.repository');
+const logger = require('../../../modules/logger');
 
 /** Shared columns for template + parser */
 const HEADERS = [
@@ -69,6 +70,14 @@ function makeSkuPrefix(tenantSlug) {
   return String(tenantSlug || 'TENANT').slice(0, 4).toUpperCase();
 }
 
+function toSlug(s = '') {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 async function ensureCategoriesMap(conn) {
   const cats = await CategoryRepo.listAll(conn); // should return [{_id,name,slug,isActive},...]
   const map = new Map();
@@ -79,6 +88,7 @@ async function ensureCategoriesMap(conn) {
 /** Returns { report, insertedIds } */
 async function importItems(conn, tenant, file, opts) {
   if (!file?.buffer || !file.originalname) throw new AppError('File required', 400);
+  const autoCreateCategories = opts?.autoCreateCategories !== false; // default true
 
   // 1) Read rows
   const rows = bufferToRows(file.buffer, file.originalname);
@@ -94,6 +104,7 @@ async function importItems(conn, tenant, file, opts) {
 
   // 3) Build Category map once
   let catMap = await ensureCategoriesMap(conn);
+  const newlyCreatedCategories = new Map(); // nameLower -> doc
 
   // 4) Prepare batch
   const dataRows = rows.slice(1);
@@ -132,6 +143,33 @@ async function importItems(conn, tenant, file, opts) {
 
     // Category lookup
     let cat = categoryName ? catMap.get(categoryName.toLowerCase()) : null;
+    if (!cat && categoryName && autoCreateCategories) {
+      // Create category once per unique name within this import
+      if (newlyCreatedCategories.has(categoryName.toLowerCase())) {
+        cat = newlyCreatedCategories.get(categoryName.toLowerCase());
+      } else {
+        let slugBase = toSlug(categoryName) || toSlug(name) || 'cat';
+        let slug = slugBase;
+        let attempt = 0;
+        while (attempt < 5) {
+          try {
+            const doc = await CategoryRepo.create(conn, { name: categoryName, slug, isActive: true });
+            cat = doc;
+            newlyCreatedCategories.set(categoryName.toLowerCase(), doc);
+            catMap.set(categoryName.toLowerCase(), doc);
+            break;
+          } catch (err) {
+            if (err?.code === 11000) { // duplicate slug, append suffix
+              attempt += 1;
+              slug = `${slugBase}-${attempt}`;
+              continue;
+            }
+            logger.error('Auto-create category failed', err);
+            break;
+          }
+        }
+      }
+    }
     if (!cat) localErrs.push(`Category "${categoryName}" not found`);
 
     // dedupe within same file
@@ -222,6 +260,7 @@ async function importItems(conn, tenant, file, opts) {
   const inserted = bulkRes.upsertedCount || 0;
   const matched = bulkRes.matchedCount || 0;
   const modified = bulkRes.modifiedCount || 0;
+  const createdCategoriesCount = newlyCreatedCategories.size;
 
   return {
     report: {
@@ -230,6 +269,7 @@ async function importItems(conn, tenant, file, opts) {
       inserted,
       matched,
       modified,
+      createdCategories: createdCategoriesCount,
       errors
     }
   };
