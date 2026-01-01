@@ -57,23 +57,22 @@ class PosMenuService {
       const categoryName = categoryRef?.name || item.branchConfig?.categoryNameSnapshot || null;
       const categorySlug = categoryRef?.slug || item.branchConfig?.categorySlugSnapshot || null;
 
+      // ✅ REFACTORED: Variations now come from RecipeVariant (already filtered by branchMenu.service)
       const variations = (item.variations || [])
         .filter((v) => v && v.isActive !== false)
         .sort((a, b) => {
-          if ((a.displayOrder || 0) !== (b.displayOrder || 0)) {
-            return (a.displayOrder || 0) - (b.displayOrder || 0);
-          }
           return (a.name || '').localeCompare(b.name || '');
         })
         .map((v) => ({
           id: v.id || v._id,
+          recipeId: v.recipeId || null,
           name: v.name,
-          type: v.type,
-          priceDelta: v.priceDelta || 0,
+          description: v.description || '',
+          type: v.type || 'custom',
           sizeMultiplier: v.sizeMultiplier || 1,
-          recipeVariantId: v.recipeVariantId || null,
-          isDefault: !!v.isDefault,
-          displayOrder: v.displayOrder || 0,
+          baseCostAdjustment: v.baseCostAdjustment || 0,
+          crustType: v.crustType || '',
+          totalCost: v.totalCost || 0,
           metadata: v.metadata || {},
         }));
 

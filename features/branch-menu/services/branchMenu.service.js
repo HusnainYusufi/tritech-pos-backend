@@ -5,7 +5,7 @@ const AppError = require('../../../modules/AppError');
 const BranchRepo = require('../../branch/repository/branch.repository');
 const MenuItemRepo = require('../../menu/repository/menuItem.repository');
 const BranchMenuRepo = require('../repository/branchMenu.repository');
-const MenuVariationRepo = require('../../menu/repository/menuVariation.repository');
+const RecipeVariantRepo = require('../../recipe-variant/repository/recipeVariant.repository');
 const AddOnGroupRepo = require('../../addons/repository/addOnGroup.repository');
 const AddOnItemRepo = require('../../addons/repository/addOnItem.repository');
 
@@ -256,36 +256,40 @@ class BranchMenuService {
 
     const menuItemIds = menuItems.map((m) => m._id);
 
-    // Fetch branch configs + variation/add-on definitions in parallel to keep the POS payload rich
-    const [configs, menuVariations] = await Promise.all([
+    // ✅ REFACTORED: Fetch RecipeVariants directly (Single Source of Truth)
+    // Extract recipeIds from menu items to fetch their variations
+    const recipeIds = menuItems
+      .map((m) => m.recipeId)
+      .filter(Boolean);
+
+    const [configs, recipeVariants] = await Promise.all([
       BranchMenuRepo.listByBranchAndMenuItemIds(conn, branchId, menuItemIds),
-      MenuVariationRepo.model(conn)
-        .find({ menuItemId: { $in: menuItemIds }, isActive: true })
-        .sort({ displayOrder: 1, name: 1 })
-        .lean(),
+      recipeIds.length
+        ? RecipeVariantRepo.model(conn)
+            .find({ recipeId: { $in: recipeIds }, isActive: true })
+            .sort({ name: 1 })
+            .lean()
+        : Promise.resolve([]),
     ]);
 
-    // Build variation map keyed by menuItemId for quick lookup
+    // Build variation map keyed by recipeId for quick lookup
+    // Map: recipeId -> RecipeVariant[]
     const variationMap = new Map();
-    for (const v of menuVariations) {
-      const key = String(v.menuItemId);
+    for (const v of recipeVariants) {
+      const key = String(v.recipeId);
       if (!variationMap.has(key)) variationMap.set(key, []);
       variationMap.get(key).push({
         id: v._id,
-        menuItemId: v.menuItemId,
-        recipeVariantId: v.recipeVariantId || null,
+        recipeId: v.recipeId,
         name: v.name,
-        type: v.type,
-        priceDelta: v.priceDelta || 0,
+        description: v.description || '',
+        type: v.type || 'custom',
         sizeMultiplier: v.sizeMultiplier || 1,
-        costDelta: v.costDelta || 0,
-        calculatedCost: v.calculatedCost || 0,
+        baseCostAdjustment: v.baseCostAdjustment || 0,
         crustType: v.crustType || '',
-        flavorTag: v.flavorTag || '',
+        totalCost: v.totalCost || 0,
         ingredients: v.ingredients || [],
-        isDefault: !!v.isDefault,
         isActive: v.isActive !== false,
-        displayOrder: v.displayOrder || 0,
         metadata: v.metadata || {},
       });
     }
@@ -394,7 +398,11 @@ class BranchMenuService {
           ? cfg.displayOrder
           : m.displayOrder || 0;
 
-      const variationsForItem = variationMap.get(String(m._id)) || [];
+      // ✅ REFACTORED: Fetch variations from RecipeVariant (via recipeId)
+      const variationsForItem = m.recipeId
+        ? variationMap.get(String(m.recipeId)) || []
+        : [];
+      
       const addOnsForItem =
         addOnGroupsByCategory.get(String(m.categoryId?._id || m.categoryId || '')) || [];
 
