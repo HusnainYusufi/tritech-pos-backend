@@ -513,6 +513,7 @@ class RecipeWithVariantsService {
         session.endSession();
       }
     }
+  }
 
   /**
    * Update a recipe and its variants atomically
