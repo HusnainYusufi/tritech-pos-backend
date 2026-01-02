@@ -310,41 +310,54 @@ class TenantAuthService {
 
   /**
    * Accept invite & set password (PUBLIC endpoint - no tenant context required)
-   * Resolves tenant from email lookup in TenantUserDirectory
+   * Searches all tenants for the token
    */
-  static async acceptInvite({ token, password, fullName, email }) {
+  static async acceptInvite({ token, password, fullName }) {
     if (!token) throw new AppError('token required', 400);
     if (!password) throw new AppError('password required', 400);
-    if (!email) throw new AppError('email required', 400);
 
-    // 1. Look up user's tenant from main DB directory
-    const directory = await TenantUserDirectoryRepo.findByEmail(email);
-    if (!directory) throw new AppError('User not found. Please contact your administrator.', 404);
+    // 1. Get all active tenants from main DB
+    const tenants = await Tenant.find({ status: { $ne: 'deleted' } }).select('slug dbUri').lean();
+    if (!tenants.length) throw new AppError('No tenants found', 500);
 
-    logger.info('[TenantAuthService.acceptInvite] Processing invite', { 
-      email, 
-      tenantSlug: directory.tenantSlug 
-    });
+    logger.info('[TenantAuthService.acceptInvite] Searching for token across tenants');
 
-    // 2. Connect to tenant DB
-    const tenantDoc = await Tenant.findOne({ slug: directory.tenantSlug }).lean();
-    if (!tenantDoc) throw new AppError('Tenant not found', 404);
-    if (!tenantDoc.dbUri) throw new AppError('Tenant database not configured', 500);
+    // 2. Search for token across all tenant DBs
+    let userDoc = null;
+    let foundTenantSlug = null;
 
-    const conn = await getTenantConnection(directory.tenantSlug, tenantDoc.dbUri);
+    for (const tenant of tenants) {
+      if (!tenant.dbUri) continue;
+      
+      try {
+        const conn = await getTenantConnection(tenant.slug, tenant.dbUri);
+        const User = TenantUserRepo.model(conn);
+        const now = new Date();
+        
+        const user = await User.findOne({ 
+          resetToken: token, 
+          resetTokenExpiresAt: { $gt: now }
+        });
+        
+        if (user) {
+          userDoc = user;
+          foundTenantSlug = tenant.slug;
+          break;
+        }
+      } catch (err) {
+        logger.warn(`[TenantAuthService.acceptInvite] Error checking tenant ${tenant.slug}`, err);
+        continue;
+      }
+    }
 
-    // 3. Find user by resetToken in tenant DB
-    const User = TenantUserRepo.model(conn);
-    const now = new Date();
-    const userDoc = await User.findOne({ 
-      resetToken: token, 
-      resetTokenExpiresAt: { $gt: now },
-      email: email.toLowerCase().trim()
-    });
-    
     if (!userDoc) throw new AppError('Token invalid or expired', 400);
 
-    // 4. Update password and activate
+    logger.info('[TenantAuthService.acceptInvite] Token found', { 
+      email: userDoc.email, 
+      tenantSlug: foundTenantSlug 
+    });
+
+    // 3. Update password and activate
     userDoc.passwordHash = await bcrypt.hash(password, 10);
     if (fullName) userDoc.fullName = fullName;
     userDoc.resetToken = null;
@@ -353,9 +366,17 @@ class TenantAuthService {
     userDoc.status = 'active';
     await userDoc.save();
 
+    // 4. Update main DB directory for future logins
+    await TenantUserDirectoryRepo.upsertByEmail({
+      email: userDoc.email,
+      tenantSlug: foundTenantSlug,
+      tenantUserId: userDoc._id,
+      userType: 'staff'
+    });
+
     logger.info('[TenantAuthService.acceptInvite] Password set successfully', { 
-      email, 
-      tenantSlug: directory.tenantSlug,
+      email: userDoc.email, 
+      tenantSlug: foundTenantSlug,
       userId: userDoc._id 
     });
 
@@ -364,7 +385,7 @@ class TenantAuthService {
       message: 'Password set successfully. You can now login.',
       result: {
         email: userDoc.email,
-        tenantSlug: directory.tenantSlug
+        tenantSlug: foundTenantSlug
       }
     };
   }

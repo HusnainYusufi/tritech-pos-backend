@@ -255,7 +255,7 @@ router.post('/logout-pin', tenantContext, validate(logoutPin), async (req, res, 
  *     description: |
  *       Set password for staff account using invitation token.
  *       This is a PUBLIC endpoint - no authentication or tenant header required.
- *       Tenant is resolved from the email address.
+ *       The system searches all tenants to find the token.
  *     requestBody:
  *       required: true
  *       content:
@@ -263,15 +263,9 @@ router.post('/logout-pin', tenantContext, validate(logoutPin), async (req, res, 
  *           schema:
  *             type: object
  *             required:
- *               - email
  *               - token
  *               - password
  *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: staff@restaurant.com
- *                 description: Your email address
  *               token:
  *                 type: string
  *                 example: abc123def456...
@@ -315,10 +309,10 @@ router.post('/logout-pin', tenantContext, validate(logoutPin), async (req, res, 
  */
 router.post('/accept-invite', async (req, res, next) => {
   try {
-    const { email, token, password, fullName } = req.body || {};
-    if (!email || !token || !password) throw new AppError('email, token and password are required', 400);
-    // NOTE: No tenantContext middleware - tenant resolved from email in TenantUserDirectory
-    const r = await TenantAuthService.acceptInvite({ email, token, password, fullName });
+    const { token, password, fullName } = req.body || {};
+    if (!token || !password) throw new AppError('token and password are required', 400);
+    // NOTE: No tenantContext middleware - system searches all tenants for the token
+    const r = await TenantAuthService.acceptInvite({ token, password, fullName });
     return res.status(r.status).json(r);
   } catch (e) { logger.error(e); next(e); }
 });
