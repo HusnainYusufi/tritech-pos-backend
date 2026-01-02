@@ -10,6 +10,8 @@ const TenantUserDirectoryRepo = require('../repository/tenantUserDirectory.repos
 const { sendEmail } = require('../../../modules/helper');
 const { hasTenantScope, branchGuard, posGuard } = require('./tenantGuards');
 const PosTerminalService = require('../../pos/services/PosTerminalService');
+const { getTenantConnection } = require('../../../modules/connectionManager');
+const Tenant = require('../../tenant/model/Tenant.model');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 const TOKEN_TTL_DAYS = parseInt(process.env.JWT_TTL_DAYS || '7', 10);
@@ -306,13 +308,43 @@ class TenantAuthService {
     };
   }
 
-  /** Invite-based: accept invite & set password (Option B) */
-  static async acceptInvite(conn, { token, password, fullName }) {
+  /**
+   * Accept invite & set password (PUBLIC endpoint - no tenant context required)
+   * Resolves tenant from email lookup in TenantUserDirectory
+   */
+  static async acceptInvite({ token, password, fullName, email }) {
+    if (!token) throw new AppError('token required', 400);
+    if (!password) throw new AppError('password required', 400);
+    if (!email) throw new AppError('email required', 400);
+
+    // 1. Look up user's tenant from main DB directory
+    const directory = await TenantUserDirectoryRepo.findByEmail(email);
+    if (!directory) throw new AppError('User not found. Please contact your administrator.', 404);
+
+    logger.info('[TenantAuthService.acceptInvite] Processing invite', { 
+      email, 
+      tenantSlug: directory.tenantSlug 
+    });
+
+    // 2. Connect to tenant DB
+    const tenantDoc = await Tenant.findOne({ slug: directory.tenantSlug }).lean();
+    if (!tenantDoc) throw new AppError('Tenant not found', 404);
+    if (!tenantDoc.dbUri) throw new AppError('Tenant database not configured', 500);
+
+    const conn = await getTenantConnection(directory.tenantSlug, tenantDoc.dbUri);
+
+    // 3. Find user by resetToken in tenant DB
     const User = TenantUserRepo.model(conn);
     const now = new Date();
-    const userDoc = await User.findOne({ resetToken: token, resetTokenExpiresAt: { $gt: now } });
-    if (!userDoc) throw new AppError('Invite token invalid or expired', 400);
+    const userDoc = await User.findOne({ 
+      resetToken: token, 
+      resetTokenExpiresAt: { $gt: now },
+      email: email.toLowerCase().trim()
+    });
+    
+    if (!userDoc) throw new AppError('Token invalid or expired', 400);
 
+    // 4. Update password and activate
     userDoc.passwordHash = await bcrypt.hash(password, 10);
     if (fullName) userDoc.fullName = fullName;
     userDoc.resetToken = null;
@@ -321,7 +353,20 @@ class TenantAuthService {
     userDoc.status = 'active';
     await userDoc.save();
 
-    return { status: 200, message: 'Account activated' };
+    logger.info('[TenantAuthService.acceptInvite] Password set successfully', { 
+      email, 
+      tenantSlug: directory.tenantSlug,
+      userId: userDoc._id 
+    });
+
+    return { 
+      status: 200, 
+      message: 'Password set successfully. You can now login.',
+      result: {
+        email: userDoc.email,
+        tenantSlug: directory.tenantSlug
+      }
+    };
   }
 
   static async forgotPassword(conn, { email }) {

@@ -9,7 +9,8 @@ const AppError = require('../../../modules/AppError');
 const TenantAuthService = require('../services/TenantAuthService');
 const { registerOwner, login, loginPin, logoutPin, forgotPassword, resetPassword } = require('../validation/tenantAuth.validation');
 
-router.use(tenantContext);
+// NOTE: tenantContext is applied selectively below
+// accept-invite is PUBLIC and does NOT use tenantContext
 
 /**
  * @swagger
@@ -70,7 +71,7 @@ router.use(tenantContext);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.post('/register-owner', validate(registerOwner), async (req, res, next) => {
+router.post('/register-owner', tenantContext, validate(registerOwner), async (req, res, next) => {
   try { const r = await TenantAuthService.registerOwner(req.tenantDb, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
@@ -129,7 +130,7 @@ router.post('/register-owner', validate(registerOwner), async (req, res, next) =
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/login', validate(login), async (req, res, next) => {
+router.post('/login', tenantContext, validate(login), async (req, res, next) => {
   try { const r = await TenantAuthService.login(req.tenantDb, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
@@ -190,7 +191,7 @@ router.post('/login', validate(login), async (req, res, next) => {
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/login-pin', validate(loginPin), async (req, res, next) => {
+router.post('/login-pin', tenantContext, validate(loginPin), async (req, res, next) => {
   try { const r = await TenantAuthService.loginWithPin(req.tenantDb, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
@@ -239,7 +240,7 @@ router.post('/login-pin', validate(loginPin), async (req, res, next) => {
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/logout-pin', validate(logoutPin), async (req, res, next) => {
+router.post('/logout-pin', tenantContext, validate(logoutPin), async (req, res, next) => {
   try { const r = await TenantAuthService.logoutWithPin(req.tenantDb, req.user, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
@@ -250,10 +251,11 @@ router.post('/logout-pin', validate(logoutPin), async (req, res, next) => {
  *   post:
  *     tags:
  *       - Tenant Authentication
- *     summary: Accept staff invitation
- *     description: Complete staff registration using invitation token
- *     parameters:
- *       - $ref: '#/components/parameters/tenantId'
+ *     summary: Accept staff invitation (PUBLIC)
+ *     description: |
+ *       Set password for staff account using invitation token.
+ *       This is a PUBLIC endpoint - no authentication or tenant header required.
+ *       Tenant is resolved from the email address.
  *     requestBody:
  *       required: true
  *       content:
@@ -261,12 +263,19 @@ router.post('/logout-pin', validate(logoutPin), async (req, res, next) => {
  *           schema:
  *             type: object
  *             required:
+ *               - email
  *               - token
  *               - password
  *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: staff@restaurant.com
+ *                 description: Your email address
  *               token:
  *                 type: string
- *                 example: invite_token_from_email
+ *                 example: abc123def456...
+ *                 description: Token received from admin
  *               password:
  *                 type: string
  *                 format: password
@@ -275,9 +284,10 @@ router.post('/logout-pin', validate(logoutPin), async (req, res, next) => {
  *               fullName:
  *                 type: string
  *                 example: John Smith
+ *                 description: Optional - update full name
  *     responses:
  *       200:
- *         description: Invitation accepted successfully
+ *         description: Password set successfully
  *         content:
  *           application/json:
  *             schema:
@@ -288,12 +298,16 @@ router.post('/logout-pin', validate(logoutPin), async (req, res, next) => {
  *                   example: 200
  *                 message:
  *                   type: string
- *                   example: Invitation accepted
- *                 data:
+ *                   example: Password set successfully. You can now login.
+ *                 result:
  *                   type: object
  *                   properties:
- *                     user:
- *                       $ref: '#/components/schemas/Staff'
+ *                     email:
+ *                       type: string
+ *                       example: staff@restaurant.com
+ *                     tenantSlug:
+ *                       type: string
+ *                       example: restaurant-xyz
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       404:
@@ -301,9 +315,10 @@ router.post('/logout-pin', validate(logoutPin), async (req, res, next) => {
  */
 router.post('/accept-invite', async (req, res, next) => {
   try {
-    const { token, password, fullName } = req.body || {};
-    if (!token || !password) throw new AppError('token and password are required', 400);
-    const r = await TenantAuthService.acceptInvite(req.tenantDb, { token, password, fullName });
+    const { email, token, password, fullName } = req.body || {};
+    if (!email || !token || !password) throw new AppError('email, token and password are required', 400);
+    // NOTE: No tenantContext middleware - tenant resolved from email in TenantUserDirectory
+    const r = await TenantAuthService.acceptInvite({ email, token, password, fullName });
     return res.status(r.status).json(r);
   } catch (e) { logger.error(e); next(e); }
 });
@@ -350,7 +365,7 @@ router.post('/accept-invite', async (req, res, next) => {
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.post('/forgot-password', validate(forgotPassword), async (req, res, next) => {
+router.post('/forgot-password', tenantContext, validate(forgotPassword), async (req, res, next) => {
   try { const r = await TenantAuthService.forgotPassword(req.tenantDb, req.body); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
@@ -402,7 +417,7 @@ router.post('/forgot-password', validate(forgotPassword), async (req, res, next)
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.post('/reset-password', validate(resetPassword), async (req, res, next) => {
+router.post('/reset-password', tenantContext, validate(resetPassword), async (req, res, next) => {
   try { const r = await TenantAuthService.resetPassword(req.tenantDb, req.body); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
@@ -442,7 +457,7 @@ router.post('/reset-password', validate(resetPassword), async (req, res, next) =
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get('/me', async (req, res, next) => {
+router.get('/me', tenantContext, async (req, res, next) => {
   try {
     const uid = req.user?.uid;
     if (!uid) throw new AppError('Unauthorized', 401);
