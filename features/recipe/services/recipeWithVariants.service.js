@@ -731,6 +731,7 @@ class RecipeWithVariantsService {
       }
     }
   }
-  }
-}module.exports = RecipeWithVariantsService;
+}
+
+module.exports = RecipeWithVariantsService;
 
