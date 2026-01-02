@@ -513,6 +513,223 @@ class RecipeWithVariantsService {
         session.endSession();
       }
     }
+
+  /**
+   * Update a recipe and its variants atomically
+   * - Recalculates costs for base recipe and all variants
+   * - Upserts variants by _id; removes variants not present in payload
+   */
+  static async updateWithVariants(conn, recipeId, data) {
+    const startTime = Date.now();
+    let session = null;
+    const useTransactions = await supportsTransactions(conn);
+
+    // Basic existence check
+    const existingRecipe = await RecipeRepo.getById(conn, recipeId);
+    if (!existingRecipe) {
+      throw new AppError('Recipe not found', 404);
+    }
+
+    if (useTransactions) {
+      session = await conn.startSession();
+      session.startTransaction();
+    }
+
+    try {
+      const name = String(data.name || '').trim();
+      if (!name) throw new AppError('Recipe name is required', 400);
+
+      if (!data.ingredients || !Array.isArray(data.ingredients) || data.ingredients.length === 0) {
+        throw new AppError('Recipe must have at least one ingredient', 400);
+      }
+
+      const variations = Array.isArray(data.variations) ? data.variations : [];
+      if (variations.length > 0) validateUniqueVariantNames(variations);
+
+      // Slug handling with uniqueness check (excluding current recipe)
+      const slug = data.slug ? toSlug(data.slug) : toSlug(name);
+      const slugOwner = await RecipeRepo.getBySlug(conn, slug);
+      if (slugOwner && String(slugOwner._id) !== String(recipeId)) {
+        throw new AppError(`Recipe with slug "${slug}" already exists`, 409);
+      }
+
+      // Detect circular dependencies (disallow self reference)
+      const subRecipeIds = data.ingredients
+        .filter(i => i.sourceType === 'recipe')
+        .map(i => i.sourceId);
+      if (subRecipeIds.some(id => String(id) === String(recipeId))) {
+        throw new AppError('Recipe cannot include itself as an ingredient', 400);
+      }
+      if (await detectCircular(conn, recipeId, subRecipeIds)) {
+        throw new AppError('Circular recipe dependency detected', 400);
+      }
+
+      // Recalculate base recipe cost
+      const { enriched: enrichedIngredients, total: recipeTotalCost } =
+        await calculateRecipeCost(conn, data.ingredients);
+
+      // Update base recipe
+      const recipePatch = {
+        name,
+        customName: data.customName || '',
+        slug,
+        code: data.code || '',
+        description: data.description || '',
+        type: data.type || 'final',
+        ingredients: enrichedIngredients,
+        totalCost: recipeTotalCost,
+        yield: Number(data.yield || 1),
+        isActive: data.isActive !== undefined ? !!data.isActive : true,
+        metadata: data.metadata || {},
+      };
+
+      const updatedRecipe = await RecipeRepo.model(conn).findByIdAndUpdate(
+        recipeId,
+        recipePatch,
+        { new: true, session }
+      );
+
+      // Variants upsert
+      const existingVariants = await RecipeVariantRepo.model(conn)
+        .find({ recipeId })
+        .lean();
+      const existingIds = new Set((existingVariants || []).map(v => String(v._id)));
+
+      const incomingIds = new Set();
+      const savedVariants = [];
+
+      for (const variant of variations) {
+        const { enriched: variantIngredients, total: variantCost } =
+          await calculateVariantCost(conn, variant);
+
+        const variantData = {
+          recipeId,
+          name: String(variant.name).trim(),
+          description: variant.description || '',
+          type: variant.type || 'custom',
+          sizeMultiplier: Number(variant.sizeMultiplier || 1),
+          baseCostAdjustment: Number(variant.baseCostAdjustment || 0),
+          crustType: variant.crustType || '',
+          ingredients: variantIngredients,
+          totalCost: variantCost,
+          isActive: variant.isActive !== undefined ? !!variant.isActive : true,
+          metadata: variant.metadata || {}
+        };
+
+        if (variant._id && existingIds.has(String(variant._id))) {
+          incomingIds.add(String(variant._id));
+          const updatedVariant = await RecipeVariantRepo.model(conn).findOneAndUpdate(
+            { _id: variant._id, recipeId },
+            variantData,
+            { new: true, session }
+          );
+          if (updatedVariant) savedVariants.push(updatedVariant);
+        } else {
+          const createdVariant = await RecipeVariantRepo.model(conn).create(
+            [variantData],
+            { session }
+          );
+          if (createdVariant?.[0]) {
+            const v = createdVariant[0];
+            incomingIds.add(String(v._id));
+            savedVariants.push(v);
+          }
+        }
+      }
+
+      // Delete variants not present in payload
+      const toDelete = [...existingIds].filter(id => !incomingIds.has(id));
+      if (toDelete.length > 0) {
+        await RecipeVariantRepo.model(conn).deleteMany(
+          { _id: { $in: toDelete }, recipeId },
+          { session }
+        );
+      }
+
+      if (useTransactions && session) {
+        await session.commitTransaction();
+      }
+
+      const duration = Date.now() - startTime;
+
+      return {
+        status: 200,
+        message: `Recipe updated successfully with ${savedVariants.length} variant(s)`,
+        result: {
+          recipe: {
+            _id: updatedRecipe._id,
+            name: updatedRecipe.name,
+            customName: updatedRecipe.customName,
+            slug: updatedRecipe.slug,
+            code: updatedRecipe.code,
+            description: updatedRecipe.description,
+            type: updatedRecipe.type,
+            ingredients: updatedRecipe.ingredients,
+            totalCost: updatedRecipe.totalCost,
+            yield: updatedRecipe.yield,
+            isActive: updatedRecipe.isActive,
+            metadata: updatedRecipe.metadata,
+            createdAt: updatedRecipe.createdAt,
+            updatedAt: updatedRecipe.updatedAt
+          },
+          variants: savedVariants.map(v => ({
+            _id: v._id,
+            recipeId: v.recipeId,
+            name: v.name,
+            description: v.description,
+            type: v.type,
+            sizeMultiplier: v.sizeMultiplier,
+            baseCostAdjustment: v.baseCostAdjustment,
+            crustType: v.crustType,
+            ingredients: v.ingredients,
+            totalCost: v.totalCost,
+            isActive: v.isActive,
+            metadata: v.metadata,
+            createdAt: v.createdAt,
+            updatedAt: v.updatedAt
+          })),
+          summary: {
+            recipeId: updatedRecipe._id,
+            recipeName: updatedRecipe.name,
+            recipeSlug: updatedRecipe.slug,
+            recipeCost: updatedRecipe.totalCost,
+            variantCount: savedVariants.length,
+            totalIngredients: updatedRecipe.ingredients.length,
+            processingTimeMs: duration
+          }
+        }
+      };
+    } catch (error) {
+      if (useTransactions && session) {
+        await session.abortTransaction();
+      }
+
+      if (error instanceof AppError) throw error;
+      if (error.code === 11000) {
+        const field = Object.keys(error.keyPattern || {})[0];
+        throw new AppError(
+          `Duplicate ${field}: A recipe or variant with this ${field} already exists`,
+          409
+        );
+      }
+      if (error.name === 'ValidationError') {
+        const messages = Object.values(error.errors).map(e => e.message);
+        throw new AppError(
+          `Validation failed: ${messages.join(', ')}`,
+          400
+        );
+      }
+
+      throw new AppError(
+        `Failed to update recipe with variants: ${error.message}`,
+        500
+      );
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
   }
 }module.exports = RecipeWithVariantsService;
 

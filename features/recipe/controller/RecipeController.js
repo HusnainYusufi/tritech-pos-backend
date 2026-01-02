@@ -10,7 +10,7 @@ const logger = require('../../../modules/logger');
 const svc = require('../services/recipe.service');
 const recipeWithVariantsSvc = require('../services/recipeWithVariants.service');
 const { createRecipe, updateRecipe } = require('../validation/recipe.validation');
-const { createRecipeWithVariants } = require('../validation/recipeWithVariants.validation');
+const { createRecipeWithVariants, updateRecipeWithVariants } = require('../validation/recipeWithVariants.validation');
 
 router.use(tenantContext);
 
@@ -79,6 +79,31 @@ router.post('/with-variants',
         recipeName: req.body?.name
       });
       next(e); 
+    }
+  }
+);
+
+/**
+ * 🔄 Update recipe with variants atomically
+ * PUT /t/recipes/with-variants/:id
+ *
+ * Upserts variants by _id; removes variants not present in the payload.
+ */
+router.put('/with-variants/:id',
+  checkPerms(['recipes.manage']),
+  validate(updateRecipeWithVariants),
+  async (req, res, next) => {
+    try {
+      const r = await recipeWithVariantsSvc.updateWithVariants(req.tenantDb, req.params.id, req.body);
+      res.status(r.status).json(r);
+    } catch (e) {
+      logger.error('[RecipeController] Update with variants failed', {
+        error: e.message,
+        tenant: req.tenantSlug,
+        recipeId: req.params?.id,
+        recipeName: req.body?.name
+      });
+      next(e);
     }
   }
 );

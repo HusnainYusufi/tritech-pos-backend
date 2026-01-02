@@ -61,6 +61,11 @@ const variantSchema = Joi.object({
   metadata: Joi.object().optional().default({}),
 });
 
+// Variant schema for updates (allows _id to upsert)
+const variantUpdateSchema = variantSchema.keys({
+  _id: Joi.string().optional()
+});
+
 // Main schema for creating recipe with variants
 const createRecipeWithVariants = Joi.object({
   // Base recipe fields
@@ -105,9 +110,55 @@ const createRecipeWithVariants = Joi.object({
     }),
 });
 
+// Schema for updating recipe with variants
+const updateRecipeWithVariants = Joi.object({
+  // Base recipe fields
+  name: Joi.string().trim().min(1).max(160).required()
+    .messages({
+      'any.required': 'Recipe name is required',
+      'string.empty': 'Recipe name cannot be empty',
+      'string.min': 'Recipe name must be at least 1 character',
+      'string.max': 'Recipe name cannot exceed 160 characters'
+    }),
+  customName: Joi.string().allow('').optional().default(''),
+  slug: Joi.string().trim().lowercase().optional()
+    .pattern(/^[a-z0-9-]+$/)
+    .messages({
+      'string.pattern.base': 'Slug can only contain lowercase letters, numbers, and hyphens'
+    }),
+  code: Joi.string().allow('').optional().default(''),
+  description: Joi.string().allow('').optional().default(''),
+  type: Joi.string().valid('sub', 'final').optional().default('final')
+    .messages({
+      'any.only': 'Recipe type must be either "sub" or "final"'
+    }),
+  ingredients: Joi.array().items(ingredientSchema).min(1).required()
+    .messages({
+      'any.required': 'Recipe ingredients are required',
+      'array.min': 'Recipe must have at least one ingredient',
+      'array.base': 'Ingredients must be an array'
+    }),
+  yield: Joi.number().positive().optional().default(1)
+    .messages({
+      'number.positive': 'Yield must be a positive number'
+    }),
+  isActive: Joi.boolean().optional().default(true),
+  metadata: Joi.object().optional().default({}),
+
+  // Variations array
+  variations: Joi.array().items(variantUpdateSchema).optional().default([])
+    .max(100)
+    .messages({
+      'array.base': 'Variations must be an array',
+      'array.max': 'Cannot update more than 100 variations at once'
+    }),
+});
+
 module.exports = {
   createRecipeWithVariants,
+  updateRecipeWithVariants,
   ingredientSchema,
-  variantSchema
+  variantSchema,
+  variantUpdateSchema
 };
 
