@@ -4,7 +4,6 @@ const Plan = require('../../plan/model/Plan.model');
 const AppError = require('../../../modules/AppError');
 const logger = require('../../../modules/logger');
 const { sendEmail } = require('../../../modules/helper');
-const { buildWelcomeEmailTemplate } = require('../../../modules/emailTemplates');
 const TenantRoleService = require('../../tenant-rbac/services/TenantRoleService');
 const { buildTenantDbUri } = require('../../../modules/mongoUri');
 
@@ -133,18 +132,8 @@ class TenantService {
     dbUri: tenantDbUri,
   });
 
-  // 6) email: welcome + invite (if we seeded an owner)
+  // 6) email: single invite (if we seeded an owner)
   try {
-    // welcome (optional)
-    if (data.contactEmail) {
-      await sendEmail({
-        from: '"Tritech Technology" <no-reply@tritechtechnologyllc.com>',
-        to: data.contactEmail,
-        subject: `Welcome to Tritech, ${data.name}!`,
-        html: buildWelcomeEmailTemplate(data),
-      });
-    }
-
     if (inviteInfo) {
       const acceptUrl = `${ACCEPT_BASE}?tenant=${inviteInfo.tenantSlug}&token=${inviteInfo.token}`;
       await sendEmail({
