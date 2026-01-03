@@ -15,7 +15,11 @@ const roleGrantSchema = Joi.object({
 
 const createStaff = Joi.object({
   fullName: Joi.string().max(120).required(),
-  email: Joi.string().email().required(),
+  email: Joi.alternatives().conditional('roles', {
+    is: Joi.array().items(Joi.string()).has(Joi.string().valid('cashier')),
+    then: Joi.string().optional().allow(''),
+    otherwise: Joi.string().email().required()
+  }),
   password: Joi.string().min(8).max(128).optional(),
   branchIds: Joi.array().items(Joi.string()).min(1).optional(),
   assignedBranchId: Joi.string().optional(), // Primary branch assignment for cashiers
