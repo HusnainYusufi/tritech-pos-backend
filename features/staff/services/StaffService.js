@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const AppError = require('../../../modules/AppError');
 const TenantUserRepo = require('../../tenant-auth/repository/tenantUser.repository');
 const TenantUserDirectoryRepo = require('../../tenant-auth/repository/tenantUserDirectory.repository');
+const TenantPinDirectoryRepo = require('../../tenant-auth/repository/tenantPinDirectory.repository');
 const BranchRepo = require('../../branch/repository/branch.repository');
 
 const PIN_PEPPER = process.env.PIN_PEPPER || process.env.JWT_SECRET_KEY || 'pin-pepper';
@@ -168,6 +169,24 @@ class StaffService {
         tenantUserId: doc._id,
         userType: 'staff'
       });
+
+      // Upsert PIN directory in main DB for PIN resolution without tenant slug
+      if (pinKey) {
+        try {
+          await TenantPinDirectoryRepo.upsert({
+            pinKey,
+            tenantSlug,
+            tenantUserId: doc._id,
+            assignedBranchId: doc.assignedBranchId || null,
+            posIds: doc.posIds || [],
+            status: doc.status || 'active'
+          });
+        } catch (e) {
+          const logger = require('../../../modules/logger');
+          logger.error('[StaffService.create] Failed to upsert PIN directory', e);
+          // Do not fail creation on directory sync issues
+        }
+      }
     }
 
     return { status: 200, message: 'Staff member created', result: sanitizeUser(doc) };
@@ -303,6 +322,24 @@ class StaffService {
         userType: 'staff'
       });
     }
+
+    // Sync PIN directory on PIN change
+    if (tenantSlug && payload.pin && userDoc.pinKey) {
+      try {
+        await TenantPinDirectoryRepo.upsert({
+          pinKey: userDoc.pinKey,
+          tenantSlug,
+          tenantUserId: userDoc._id,
+          assignedBranchId: userDoc.assignedBranchId || null,
+          posIds: userDoc.posIds || [],
+          status: userDoc.status || 'active'
+        });
+      } catch (e) {
+        const logger = require('../../../modules/logger');
+        logger.error('[StaffService.update] Failed to upsert PIN directory', e);
+      }
+    }
+
     return { status: 200, message: 'Staff updated', result: sanitizeUser(saved) };
   }
 
@@ -330,6 +367,24 @@ class StaffService {
     userDoc.pinLockedUntil = null;
 
     const saved = await userDoc.save();
+
+    // Sync PIN directory
+    if (payload.tenantSlug && userDoc.pinKey) {
+      try {
+        await TenantPinDirectoryRepo.upsert({
+          pinKey: userDoc.pinKey,
+          tenantSlug: payload.tenantSlug,
+          tenantUserId: userDoc._id,
+          assignedBranchId: userDoc.assignedBranchId || null,
+          posIds: userDoc.posIds || [],
+          status: userDoc.status || 'active'
+        });
+      } catch (e) {
+        const logger = require('../../../modules/logger');
+        logger.error('[StaffService.setPin] Failed to upsert PIN directory', e);
+      }
+    }
+
     return { status: 200, message: 'PIN updated', result: sanitizeUser(saved) };
   }
 

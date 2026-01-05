@@ -47,6 +47,7 @@ class Base {
                 { url: '/api-docs.json', methods: ['GET'] },
                 { url: "/t/auth/login", methods: ['GET', 'POST'] },
                 { url: "/t/auth/login-pin", methods: ['GET', 'POST'] },
+                { url: "/t/auth/login-pin", methods: ['POST'], rateLimit: { windowMs: 15 * 60 * 1000, max: 10 } },
                 { url: "/t/auth/forgot-password", methods: ['POST'] },
                 { url: "/t/auth/reset-password", methods: ['POST'] },
                 { url: "/t/auth/register-owner", methods: ['POST'] },
