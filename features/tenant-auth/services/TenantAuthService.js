@@ -212,7 +212,7 @@ class TenantAuthService {
 
     const token = this.signToken({
       tenant: true,
-      tenantSlug: tenantSlug,
+      tenantSlug: pinEntry.tenantSlug,
       uid: userDoc._id.toString(),
       email: userDoc.email,
       roles: userDoc.roles,

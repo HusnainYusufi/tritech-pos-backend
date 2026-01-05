@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 const AppError = require('../../../modules/AppError');
+const logger = require('../../../modules/logger');
 const TenantUserRepo = require('../../tenant-auth/repository/tenantUser.repository');
 const TenantUserDirectoryRepo = require('../../tenant-auth/repository/tenantUserDirectory.repository');
 const TenantPinDirectoryRepo = require('../../tenant-auth/repository/tenantPinDirectory.repository');
