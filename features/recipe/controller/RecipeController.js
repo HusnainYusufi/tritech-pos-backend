@@ -269,6 +269,17 @@ router.get('/',
   }
 );
 
+// Compatibility alias: GET /t/recipes/with-variants/:id (same as /t/recipes/:id/with-variants)
+router.get('/with-variants/:id',
+  checkPerms(['recipes.read'], { any: true }),
+  async (req, res, next) => {
+    try {
+      const r = await svc.getWithVariantsById(req.tenantDb, req.params.id, req.query);
+      res.status(r.status).json(r);
+    } catch (e) { logger.error(e); next(e); }
+  }
+);
+
 /**
  * @swagger
  * /t/recipes/by-slug/{slug}/with-variants:
