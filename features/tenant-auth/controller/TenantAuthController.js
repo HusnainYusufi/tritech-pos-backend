@@ -191,7 +191,8 @@ router.post('/login', tenantContext, validate(login), async (req, res, next) => 
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/login-pin', tenantContext, validate(loginPin), async (req, res, next) => {
+// Public PIN login: tenant resolved via PIN directory (no tenantContext)
+router.post('/login-pin', validate(loginPin), async (req, res, next) => {
   try { const r = await TenantAuthService.loginWithPin(req.tenantDb, req.body, req.tenantSlug); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
 });
