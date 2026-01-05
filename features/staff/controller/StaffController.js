@@ -340,7 +340,8 @@ router.post('/:id/set-pin',
   validate(updatePin),
   async (req, res, next) => {
     try {
-      const r = await StaffService.setPin(req.tenantDb, req.user?.uid, req.params.id, req.body, branchContext(req));
+      const payload = { ...req.body, tenantSlug: req.tenantSlug };
+      const r = await StaffService.setPin(req.tenantDb, req.user?.uid, req.params.id, payload, branchContext(req));
       return res.status(r.status).json(r);
     } catch (e) { logger.error(e); next(e); }
   }
