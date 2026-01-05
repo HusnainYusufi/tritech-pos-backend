@@ -135,7 +135,7 @@ class TenantAuthService {
     const pinKey = buildPinKey(pin);
 
     // 1) Resolve tenant + user via main DB directory
-    const pinDirectoryRepo = require('./tenantPinDirectory.repository');
+    const pinDirectoryRepo = require('../repository/tenantPinDirectory.repository');
     const pinEntry = await pinDirectoryRepo.findByPinKey(pinKey);
     if (!pinEntry) throw new AppError('Invalid credentials', 401);
     if (pinEntry.status && pinEntry.status !== 'active') throw new AppError('Account is not active', 403);
