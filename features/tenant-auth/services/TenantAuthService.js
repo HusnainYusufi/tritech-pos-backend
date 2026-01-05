@@ -124,10 +124,30 @@ class TenantAuthService {
       user: { _id: userDoc._id, fullName: userDoc.fullName, email: userDoc.email, roles: userDoc.roles, branchIds: userDoc.branchIds } } };
   }
 
-  static async loginWithPin(conn, { pin }, tenantSlug) {
+  /**
+   * Public PIN login without requiring tenantSlug from client.
+   * Steps:
+   * 1) Compute pinKey from PIN
+   * 2) Resolve tenant via main DB pin directory
+   * 3) Connect to tenant DB and validate pinHash + status + branch/POS checks
+   */
+  static async loginWithPin(_conn, { pin, terminalId } /* tenantSlug ignored */) {
     const pinKey = buildPinKey(pin);
+
+    // 1) Resolve tenant + user via main DB directory
+    const pinDirectoryRepo = require('./tenantPinDirectory.repository');
+    const pinEntry = await pinDirectoryRepo.findByPinKey(pinKey);
+    if (!pinEntry) throw new AppError('Invalid credentials', 401);
+    if (pinEntry.status && pinEntry.status !== 'active') throw new AppError('Account is not active', 403);
+
+    // 2) Get tenant connection
+    const Tenant = require('../../tenant/model/Tenant.model');
+    const tenantDoc = await Tenant.findOne({ slug: pinEntry.tenantSlug }).lean();
+    if (!tenantDoc || !tenantDoc.dbUri) throw new AppError('Tenant not found', 404);
+
+    const conn = await getTenantConnection(pinEntry.tenantSlug, tenantDoc.dbUri);
     const User = TenantUserRepo.model(conn);
-    const userDoc = await User.findOne({ pinKey });
+    const userDoc = await User.findById(pinEntry.tenantUserId);
     if (!userDoc || !userDoc.pinHash) throw new AppError('Invalid credentials', 401);
     if (userDoc.status !== 'active') throw new AppError('Account is not active', 403);
     if (!userDoc.isStaff) throw new AppError('PIN login is only available for staff accounts', 403);
