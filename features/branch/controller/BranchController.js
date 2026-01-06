@@ -8,7 +8,8 @@ const validate = require('../../../middlewares/validate');
 const logger = require('../../../modules/logger');
 
 const svc = require('../services/BranchService');
-const { createBranch, updateBranch, updateSettings, branchUser } = require('../validation/branch.validation');
+const BranchConfigService = require('../services/BranchConfigService');
+const { createBranch, updateBranch, updateSettings, branchUser, updatePosConfig } = require('../validation/branch.validation');
 
 router.use(tenantContext);
 
@@ -602,6 +603,166 @@ router.get('/:branchId/summary',
   async (req, res, next) => {
     try {
       const r = await svc.summary(req.tenantDb, req.params.branchId);
+      return res.status(r.status).json(r);
+    } catch (e) { logger.error(e); next(e); }
+  }
+);
+
+/**
+ * @swagger
+ * /t/branches/{branchId}/pos-config:
+ *   get:
+ *     tags:
+ *       - Branches
+ *     summary: Get POS configuration for a branch
+ *     description: |
+ *       Retrieve POS behavior settings and receipt customization for a branch.
+ *       Used by frontend after cashier login to determine UI behavior.
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: branchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     responses:
+ *       200:
+ *         description: POS configuration retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: POS configuration retrieved successfully
+ *                 result:
+ *                   type: object
+ *                   properties:
+ *                     branchId:
+ *                       type: string
+ *                     branchName:
+ *                       type: string
+ *                     currency:
+ *                       type: string
+ *                       example: PKR
+ *                     posConfig:
+ *                       type: object
+ *                       properties:
+ *                         paymentMode:
+ *                           type: string
+ *                           enum: [payNow, payLater]
+ *                           example: payNow
+ *                         receiptConfig:
+ *                           type: object
+ *                         paymentMethods:
+ *                           type: object
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+router.get('/:branchId/pos-config',
+  checkPerms(['branches.read'], { any: true, branchParam: 'branchId' }),
+  async (req, res, next) => {
+    try {
+      const r = await BranchConfigService.getPosConfig(req.tenantDb, req.params.branchId);
+      return res.status(r.status).json(r);
+    } catch (e) { logger.error(e); next(e); }
+  }
+);
+
+/**
+ * @swagger
+ * /t/branches/{branchId}/pos-config:
+ *   put:
+ *     tags:
+ *       - Branches
+ *     summary: Update POS configuration for a branch
+ *     description: |
+ *       Update POS behavior settings and receipt customization.
+ *       Changes take effect immediately for all cashiers in this branch.
+ *     parameters:
+ *       - $ref: '#/components/parameters/tenantId'
+ *       - name: branchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Branch ID
+ *     security:
+ *       - bearerAuth: []
+ *       - tenantHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               paymentMode:
+ *                 type: string
+ *                 enum: [payNow, payLater]
+ *                 description: Payment workflow mode (payNow=immediate, payLater=bill after service)
+ *                 example: payNow
+ *               receiptConfig:
+ *                 type: object
+ *                 properties:
+ *                   showLogo:
+ *                     type: boolean
+ *                   logoUrl:
+ *                     type: string
+ *                   footerText:
+ *                     type: string
+ *                   showTaxBreakdown:
+ *                     type: boolean
+ *                   paperWidth:
+ *                     type: number
+ *                     enum: [58, 80]
+ *               paymentMethods:
+ *                 type: object
+ *                 properties:
+ *                   cash:
+ *                     type: object
+ *                     properties:
+ *                       enabled:
+ *                         type: boolean
+ *                       taxRateOverride:
+ *                         type: number
+ *                         nullable: true
+ *           examples:
+ *             setPayLaterMode:
+ *               summary: Enable fine dining mode
+ *               value:
+ *                 paymentMode: payLater
+ *                 enableTableService: true
+ *             customizeReceipt:
+ *               summary: Customize receipt
+ *               value:
+ *                 receiptConfig:
+ *                   showLogo: true
+ *                   logoUrl: https://example.com/logo.png
+ *                   footerText: Visit us again!
+ *                   showTaxBreakdown: true
+ *     responses:
+ *       200:
+ *         description: POS configuration updated successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+router.put('/:branchId/pos-config',
+  checkPerms(['branches.manage', 'branches.settings'], { any: true, branchParam: 'branchId' }),
+  validate(updatePosConfig),
+  async (req, res, next) => {
+    try {
+      const r = await BranchConfigService.updatePosConfig(req.tenantDb, req.params.branchId, req.body);
       return res.status(r.status).json(r);
     } catch (e) { logger.error(e); next(e); }
   }

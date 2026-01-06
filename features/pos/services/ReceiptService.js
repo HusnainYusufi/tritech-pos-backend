@@ -39,6 +39,9 @@ class ReceiptService {
       throw new AppError('Branch information not found', 404);
     }
 
+    // Get receipt config from branch
+    const receiptConfig = branch.posConfig?.receiptConfig || {};
+    
     // Build receipt data
     const receiptData = {
       orderNumber: orderDoc.orderNumber,
@@ -53,6 +56,7 @@ class ReceiptService {
       customerPhone: orderDoc.customerPhone || '',
       items: orderDoc.items.map(item => ({
         name: item.nameSnapshot,
+        code: receiptConfig.showItemCodes ? item.codeSnapshot : null,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         lineTotal: item.lineTotal,
@@ -68,8 +72,20 @@ class ReceiptService {
       paymentMethod: orderDoc.payment?.method || 'cash',
       amountPaid: orderDoc.payment?.amountPaid || 0,
       change: orderDoc.payment?.change || 0,
-      receiptFooter: branch.posConfig?.receiptFooter || 'Thank you for your business!',
-      status: orderDoc.status
+      status: orderDoc.status,
+      // Receipt customization from branch config
+      config: {
+        showLogo: receiptConfig.showLogo || false,
+        logoUrl: receiptConfig.logoUrl || '',
+        showQRCode: receiptConfig.showQRCode || false,
+        qrCodeData: receiptConfig.qrCodeData || '',
+        headerText: receiptConfig.headerText || '',
+        footerText: receiptConfig.footerText || branch.posConfig?.receiptFooter || 'Thank you for your business!',
+        showTaxBreakdown: receiptConfig.showTaxBreakdown !== false,
+        showItemCodes: receiptConfig.showItemCodes || false,
+        paperWidth: receiptConfig.paperWidth || 80,
+        fontSizeMultiplier: receiptConfig.fontSizeMultiplier || 1.0
+      }
     };
 
     // Generate receipt in requested format

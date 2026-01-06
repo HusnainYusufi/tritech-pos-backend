@@ -224,6 +224,10 @@ class TenantAuthService {
       tillSessionId: null
     });
 
+    // Get branch POS config for frontend
+    const BranchConfigService = require('../../branch/services/BranchConfigService');
+    const branchConfig = await BranchConfigService.getPosConfigForAuth(conn, effectiveBranch);
+
     return {
       status: 200,
       message: 'Login successful',
@@ -235,7 +239,8 @@ class TenantAuthService {
         posName: terminal?.name || null,
         requiresPosSelection: !effectivePosId, // true if cashier needs to select POS
         availableTerminals: availableTerminals || [], // List of POS terminals cashier can use
-        tillSessionId: null
+        tillSessionId: null,
+        branchConfig // ✅ Frontend now knows paymentMode and receipt settings
       }
     };
   }
@@ -446,7 +451,23 @@ class TenantAuthService {
   static async me(conn, { uid }) {
     const user = await TenantUserRepo.getById(conn, uid);
     if (!user) throw new AppError('User not found', 404);
-    return { status: 200, message: 'OK', result: user };
+
+    // Include branch POS config for cashiers/staff
+    let branchConfig = null;
+    if (user.assignedBranchId || user.branchIds?.length > 0) {
+      const BranchConfigService = require('../../branch/services/BranchConfigService');
+      const branchId = user.assignedBranchId || user.branchIds[0];
+      branchConfig = await BranchConfigService.getPosConfigForAuth(conn, branchId);
+    }
+
+    return { 
+      status: 200, 
+      message: 'OK', 
+      result: {
+        ...user,
+        branchConfig
+      }
+    };
   }
 }
 

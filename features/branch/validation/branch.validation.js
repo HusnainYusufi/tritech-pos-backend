@@ -72,4 +72,39 @@ const branchUser = Joi.object({
   userId: Joi.string().required()
 });
 
-module.exports = { createBranch, updateBranch, updateSettings, branchUser };
+const updatePosConfig = Joi.object({
+  orderPrefix: Joi.string().max(10).optional(),
+  receiptFooter: Joi.string().max(500).optional(),
+  enableHoldOrders: Joi.boolean().optional(),
+  enableTableService: Joi.boolean().optional(),
+  paymentMode: Joi.string().valid('payNow', 'payLater').optional(),
+  receiptConfig: Joi.object({
+    showLogo: Joi.boolean().optional(),
+    logoUrl: Joi.string().uri().allow('').optional(),
+    showQRCode: Joi.boolean().optional(),
+    qrCodeData: Joi.string().max(500).allow('').optional(),
+    headerText: Joi.string().max(200).allow('').optional(),
+    footerText: Joi.string().max(500).allow('').optional(),
+    showTaxBreakdown: Joi.boolean().optional(),
+    showItemCodes: Joi.boolean().optional(),
+    paperWidth: Joi.number().valid(58, 80).optional(),
+    fontSizeMultiplier: Joi.number().min(0.5).max(2.0).optional()
+  }).optional(),
+  paymentMethods: Joi.object({
+    cash: Joi.object({
+      enabled: Joi.boolean().optional(),
+      taxRateOverride: Joi.number().min(0).max(99.99).allow(null).optional()
+    }).optional(),
+    card: Joi.object({
+      enabled: Joi.boolean().optional(),
+      taxRateOverride: Joi.number().min(0).max(99.99).allow(null).optional(),
+      minAmount: Joi.number().min(0).optional()
+    }).optional(),
+    mobile: Joi.object({
+      enabled: Joi.boolean().optional(),
+      taxRateOverride: Joi.number().min(0).max(99.99).allow(null).optional()
+    }).optional()
+  }).optional()
+});
+
+module.exports = { createBranch, updateBranch, updateSettings, branchUser, updatePosConfig };

@@ -43,7 +43,47 @@ module.exports = (Schema) => {
       orderPrefix: { type: String, default: 'ORD' },
       receiptFooter: { type: String, default: '' },
       enableHoldOrders: { type: Boolean, default: true },
-      enableTableService: { type: Boolean, default: false }
+      enableTableService: { type: Boolean, default: false },
+      
+      // Payment workflow mode (frontend behavior control)
+      paymentMode: {
+        type: String,
+        enum: ['payNow', 'payLater'],
+        default: 'payNow',
+        // payNow: immediate payment (KFC/fast food style)
+        // payLater: bill after service (fine dining style)
+      },
+      
+      // Receipt customization
+      receiptConfig: {
+        showLogo: { type: Boolean, default: false },
+        logoUrl: { type: String, default: '' },
+        showQRCode: { type: Boolean, default: false },
+        qrCodeData: { type: String, default: '' }, // URL or payment link
+        headerText: { type: String, default: '' },
+        footerText: { type: String, default: 'Thank you for your business!' },
+        showTaxBreakdown: { type: Boolean, default: true },
+        showItemCodes: { type: Boolean, default: false },
+        paperWidth: { type: Number, default: 80, enum: [58, 80] }, // mm
+        fontSizeMultiplier: { type: Number, default: 1.0, min: 0.5, max: 2.0 }
+      },
+      
+      // Payment method specific settings
+      paymentMethods: {
+        cash: {
+          enabled: { type: Boolean, default: true },
+          taxRateOverride: { type: Number, default: null }, // null = use branch tax
+        },
+        card: {
+          enabled: { type: Boolean, default: true },
+          taxRateOverride: { type: Number, default: null },
+          minAmount: { type: Number, default: 0 }
+        },
+        mobile: {
+          enabled: { type: Boolean, default: true },
+          taxRateOverride: { type: Number, default: null },
+        }
+      }
     },
 
     printers: { type: [PrinterSchema], default: [] },

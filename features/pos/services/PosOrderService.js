@@ -75,17 +75,15 @@ class PosOrderService {
     // Calculate totals with payment-method-based tax override
     const subTotal = pricedItems.reduce((acc, line) => acc + (line.lineTotal || 0), 0);
 
-    // Payment method specific tax rules (business rule)
-    const paymentTaxRate =
-      paymentMethod === 'card'
-        ? 16
-        : paymentMethod === 'cash'
-          ? 5
-          : null; // fallback to branch tax if not cash/card
-
-    const effectiveTaxRate = typeof paymentTaxRate === 'number'
-      ? paymentTaxRate
-      : (branchDoc.tax?.rate || 0);
+    // Payment method specific tax rules (check branch config first, then fallback to hardcoded)
+    let effectiveTaxRate = branchDoc.tax?.rate || 0;
+    
+    if (paymentMethod && branchDoc.posConfig?.paymentMethods) {
+      const methodConfig = branchDoc.posConfig.paymentMethods[paymentMethod];
+      if (methodConfig?.taxRateOverride !== null && methodConfig?.taxRateOverride !== undefined) {
+        effectiveTaxRate = methodConfig.taxRateOverride;
+      }
+    }
 
     const effectiveTaxMode = branchDoc.tax?.mode || 'exclusive';
     const taxTotal = effectiveTaxMode === 'exclusive'
@@ -98,8 +96,9 @@ class PosOrderService {
     const orderPrefix = branchDoc.posConfig?.orderPrefix || 'ORD';
     const orderNumber = await generateNextOrderNumber(conn, effectiveBranchId, orderPrefix);
 
-    // Determine order status and payment
-    const isPaid = amountPaid >= grandTotal;
+    // Determine order status and payment (support optional payment for payLater mode)
+    const hasPayment = amountPaid > 0;
+    const isPaid = hasPayment && amountPaid >= grandTotal;
     const orderStatus = isPaid ? 'paid' : 'placed';
     const change = isPaid ? Math.max(0, amountPaid - grandTotal) : 0;
 
