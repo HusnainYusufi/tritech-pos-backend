@@ -4,7 +4,7 @@ const validate = require('../../../middlewares/validate');
 const logger = require('../../../modules/logger');
 const AppError = require('../../../modules/AppError');
 
-const { register, login, forgotPassword, resetPassword } = require('../validation/auth.validation');
+const { register, login, forgotPassword, resetPassword, requestOTP, verifyOTP, resetPasswordWithOTP } = require('../validation/auth.validation');
 const AuthService = require('../services/AuthService');
 
 /**
@@ -278,6 +278,169 @@ router.post('/forgotPassword', validate(forgotPassword), async (req, res, next) 
 router.post('/reset-password', validate(resetPassword), async (req, res, next) => {
   try { const r = await AuthService.resetPassword(req.body); return res.status(r.status).json(r); }
   catch (e) { logger.error(e); next(e); }
+});
+
+// ==================== OTP-BASED PASSWORD RESET ====================
+
+/**
+ * @swagger
+ * /auth/password-reset/request-otp:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Request OTP for password reset (Admin)
+ *     description: Sends a 6-digit OTP to the admin user's email for password reset
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: admin@example.com
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: OTP sent to your email. Please check your inbox.
+ *                 result:
+ *                   type: object
+ *                   properties:
+ *                     email:
+ *                       type: string
+ *                       example: admin@example.com
+ *                     expiresIn:
+ *                       type: string
+ *                       example: 10 minutes
+ *       429:
+ *         description: Too many requests
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/password-reset/request-otp', validate(requestOTP), async (req, res, next) => {
+  try {
+    const metadata = {
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.get('user-agent')
+    };
+    const r = await AuthService.requestPasswordResetOTP(req.body, metadata);
+    return res.status(r.status).json(r);
+  } catch (e) { logger.error(e); next(e); }
+});
+
+/**
+ * @swagger
+ * /auth/password-reset/verify-otp:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Verify OTP for password reset (Admin)
+ *     description: Verifies the 6-digit OTP sent to the admin user's email
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: admin@example.com
+ *               otp:
+ *                 type: string
+ *                 pattern: '^[0-9]{6}$'
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: OTP verified successfully. You can now reset your password.
+ *       400:
+ *         description: Invalid OTP or max attempts exceeded
+ */
+router.post('/password-reset/verify-otp', validate(verifyOTP), async (req, res, next) => {
+  try {
+    const r = await AuthService.verifyPasswordResetOTP(req.body);
+    return res.status(r.status).json(r);
+  } catch (e) { logger.error(e); next(e); }
+});
+
+/**
+ * @swagger
+ * /auth/password-reset/reset:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Reset password with verified OTP (Admin)
+ *     description: Resets the admin user's password after OTP verification
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: admin@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 example: NewSecurePass123!
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Password reset successful. You can now login with your new password.
+ *       400:
+ *         description: No verified OTP found or invalid request
+ */
+router.post('/password-reset/reset', validate(resetPasswordWithOTP), async (req, res, next) => {
+  try {
+    const r = await AuthService.resetPasswordWithOTP(req.body);
+    return res.status(r.status).json(r);
+  } catch (e) { logger.error(e); next(e); }
 });
 
 module.exports = router;

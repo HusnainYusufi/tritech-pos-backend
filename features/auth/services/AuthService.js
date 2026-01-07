@@ -6,6 +6,7 @@ const AppError = require('../../../modules/AppError');
 const logger = require('../../../modules/logger');
 const UserRepo = require('../repository/user.repository');
 const RoleRepo = require('../../role/repository/role.repository'); // uses your existing Role repo
+const OTPService = require('./OTPService');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 const TOKEN_TTL_DAYS = parseInt(process.env.JWT_TTL_DAYS || '7', 10);
@@ -125,6 +126,83 @@ class AuthService {
     await userDoc.save();
 
     return { status: 200, message: 'Password has been reset' };
+  }
+
+  // ==================== OTP-BASED PASSWORD RESET ====================
+
+  /**
+   * Request OTP for admin password reset
+   */
+  static async requestPasswordResetOTP({ email }, metadata = {}) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if user exists
+    const userDoc = await UserRepo.getByEmail(normalizedEmail);
+    if (!userDoc) {
+      // Don't reveal if user exists or not (security best practice)
+      return {
+        status: 200,
+        message: 'If an account exists with this email, an OTP has been sent.'
+      };
+    }
+
+    // Request OTP
+    return await OTPService.requestOTP(normalizedEmail, 'admin', null, metadata);
+  }
+
+  /**
+   * Verify OTP for admin password reset
+   */
+  static async verifyPasswordResetOTP({ email, otp }) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if user exists
+    const userDoc = await UserRepo.getByEmail(normalizedEmail);
+    if (!userDoc) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Verify OTP
+    return await OTPService.verifyOTP(normalizedEmail, otp);
+  }
+
+  /**
+   * Reset password with verified OTP
+   */
+  static async resetPasswordWithOTP({ email, password }) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Validate that OTP was verified
+    const otpRecord = await OTPService.validateVerifiedOTP(normalizedEmail);
+
+    if (otpRecord.userType !== 'admin') {
+      throw new AppError('Invalid OTP for admin user', 400);
+    }
+
+    // Find user
+    const userDoc = await UserRepo.getDocByEmail(normalizedEmail);
+    if (!userDoc) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Update password
+    userDoc.passwordHash = await bcrypt.hash(password, 10);
+    userDoc.resetToken = null;
+    userDoc.resetTokenExpiresAt = null;
+    await userDoc.save();
+
+    // Mark OTP as used
+    await OTPService.markOTPAsUsed(normalizedEmail);
+
+    logger.info(`Admin password reset successful for: ${normalizedEmail}`);
+
+    return {
+      status: 200,
+      message: 'Password reset successful. You can now login with your new password.',
+      result: {
+        email: normalizedEmail
+      }
+    };
   }
 }
 

@@ -1,0 +1,634 @@
+{
+  "info": {
+    "name": "Branch POS Configuration",
+    "_postman_id": "branch-pos-config-collection",
+    "description": "Complete CRUD operations for Branch POS Configuration (Pay Now/Pay Later, Receipt Customization)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "1. PIN Login (Returns branchConfig)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"123456\",\n  \"terminalId\": \"terminal_123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/auth/login-pin",
+              "host": ["{{base_url}}"],
+              "path": ["t", "auth", "login-pin"]
+            },
+            "description": "Login with PIN. Response includes branchConfig automatically."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pin\": \"123456\",\n  \"terminalId\": \"terminal_123\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/t/auth/login-pin",
+                  "host": ["{{base_url}}"],
+                  "path": ["t", "auth", "login-pin"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"status\": 200,\n  \"message\": \"Login successful\",\n  \"result\": {\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"user\": {\n      \"uid\": \"695c19f328e0595f4d5992c1\",\n      \"fullName\": \"John Cashier\",\n      \"email\": \"cashier@example.com\",\n      \"roles\": [\"cashier\"]\n    },\n    \"branchId\": \"695c0a424a21fc8972afb942\",\n    \"posId\": \"695c0a424a21fc8972afb943\",\n    \"branchConfig\": {\n      \"branchId\": \"695c0a424a21fc8972afb942\",\n      \"branchName\": \"Main Branch\",\n      \"currency\": \"PKR\",\n      \"paymentMode\": \"payNow\",\n      \"enableTableService\": false,\n      \"receiptConfig\": {\n        \"showLogo\": false,\n        \"logoUrl\": \"\",\n        \"footerText\": \"Thank you for your business!\"\n      },\n      \"paymentMethods\": {\n        \"cash\": { \"enabled\": true },\n        \"card\": { \"enabled\": true },\n        \"mobile\": { \"enabled\": true }\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "2. Get Current User (ME API - Returns branchConfig)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["t", "auth", "me"]
+            },
+            "description": "Get current user info. Response includes branchConfig automatically."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "x-tenant-id",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/t/auth/me",
+                  "host": ["{{base_url}}"],
+                  "path": ["t", "auth", "me"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"status\": 200,\n  \"message\": \"OK\",\n  \"result\": {\n    \"uid\": \"695c19f328e0595f4d5992c1\",\n    \"fullName\": \"John Cashier\",\n    \"email\": \"cashier@example.com\",\n    \"roles\": [\"cashier\"],\n    \"assignedBranchId\": \"695c0a424a21fc8972afb942\",\n    \"branchConfig\": {\n      \"branchId\": \"695c0a424a21fc8972afb942\",\n      \"branchName\": \"Main Branch\",\n      \"currency\": \"PKR\",\n      \"paymentMode\": \"payNow\",\n      \"enableTableService\": false,\n      \"receiptConfig\": {\n        \"showLogo\": false,\n        \"logoUrl\": \"\",\n        \"footerText\": \"Thank you for your business!\"\n      },\n      \"paymentMethods\": {\n        \"cash\": { \"enabled\": true },\n        \"card\": { \"enabled\": true },\n        \"mobile\": { \"enabled\": true }\n      }\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Branch Management (includes POS config)",
+      "item": [
+        {
+          "name": "1. Create Branch (Config Auto-Created)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Branch\",\n  \"code\": \"BRANCH01\",\n  \"status\": \"active\",\n  \"contact\": {\n    \"phone\": \"+1234567890\",\n    \"email\": \"branch@example.com\"\n  },\n  \"address\": {\n    \"line1\": \"123 Main Street\",\n    \"city\": \"Karachi\",\n    \"country\": \"Pakistan\"\n  },\n  \"timezone\": \"Asia/Karachi\",\n  \"currency\": \"PKR\",\n  \"tax\": {\n    \"mode\": \"exclusive\",\n    \"rate\": 15,\n    \"vatNumber\": \"VAT123456\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches"]
+            },
+            "description": "Create a new branch. POS config is automatically created with default values."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"New Branch\",\n  \"code\": \"BRANCH01\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/t/branches",
+                  "host": ["{{base_url}}"],
+                  "path": ["t", "branches"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"status\": 201,\n  \"message\": \"Branch created successfully\",\n  \"result\": {\n    \"_id\": \"695c0a424a21fc8972afb942\",\n    \"name\": \"New Branch\",\n    \"code\": \"BRANCH01\",\n    \"currency\": \"PKR\",\n    \"posConfig\": {\n      \"orderPrefix\": \"ORD\",\n      \"receiptFooter\": \"\",\n      \"enableHoldOrders\": true,\n      \"enableTableService\": false,\n      \"paymentMode\": \"payNow\",\n      \"receiptConfig\": {\n        \"showLogo\": false,\n        \"logoUrl\": \"\",\n        \"showQRCode\": false,\n        \"qrCodeData\": \"\",\n        \"headerText\": \"\",\n        \"footerText\": \"Thank you for your business!\",\n        \"showTaxBreakdown\": true,\n        \"showItemCodes\": false,\n        \"paperWidth\": 80,\n        \"fontSizeMultiplier\": 1.0\n      },\n      \"paymentMethods\": {\n        \"cash\": { \"enabled\": true, \"taxRateOverride\": null },\n        \"card\": { \"enabled\": true, \"taxRateOverride\": null, \"minAmount\": 0 },\n        \"mobile\": { \"enabled\": true, \"taxRateOverride\": null }\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "2. Get All Branches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branches",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches"]
+            },
+            "description": "Get all branches with their POS configurations."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get Single Branch",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}"]
+            },
+            "description": "Get a single branch with its POS configuration."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Delete Branch",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}"]
+            },
+            "description": "Delete a branch (POS config is deleted with it)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Branch POS Config - CRUD",
+      "item": [
+        {
+          "name": "1. Get Branch POS Config (READ)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Get complete POS configuration for a branch."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "x-tenant-id",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+                  "host": ["{{base_url}}"],
+                  "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"status\": 200,\n  \"message\": \"POS configuration retrieved successfully\",\n  \"result\": {\n    \"branchId\": \"695c0a424a21fc8972afb942\",\n    \"branchName\": \"Main Branch\",\n    \"currency\": \"PKR\",\n    \"timezone\": \"Asia/Karachi\",\n    \"tax\": {\n      \"mode\": \"exclusive\",\n      \"rate\": 15,\n      \"vatNumber\": \"\"\n    },\n    \"posConfig\": {\n      \"orderPrefix\": \"ORD\",\n      \"receiptFooter\": \"\",\n      \"enableHoldOrders\": true,\n      \"enableTableService\": false,\n      \"paymentMode\": \"payNow\",\n      \"receiptConfig\": {\n        \"showLogo\": false,\n        \"logoUrl\": \"\",\n        \"showQRCode\": false,\n        \"qrCodeData\": \"\",\n        \"headerText\": \"\",\n        \"footerText\": \"Thank you for your business!\",\n        \"showTaxBreakdown\": true,\n        \"showItemCodes\": false,\n        \"paperWidth\": 80,\n        \"fontSizeMultiplier\": 1.0\n      },\n      \"paymentMethods\": {\n        \"cash\": {\n          \"enabled\": true,\n          \"taxRateOverride\": null\n        },\n        \"card\": {\n          \"enabled\": true,\n          \"taxRateOverride\": null,\n          \"minAmount\": 0\n        },\n        \"mobile\": {\n          \"enabled\": true,\n          \"taxRateOverride\": null\n        }\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "2. Update to Pay Later Mode (UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMode\": \"payLater\",\n  \"enableTableService\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Change payment mode to Pay Later (fine dining style)."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Update to Pay Now Mode (UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMode\": \"payNow\",\n  \"enableTableService\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Change payment mode to Pay Now (fast food style)."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Update Receipt Config (UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiptConfig\": {\n    \"showLogo\": true,\n    \"logoUrl\": \"https://example.com/logo.png\",\n    \"showQRCode\": true,\n    \"qrCodeData\": \"https://restaurant.com/feedback\",\n    \"headerText\": \"Welcome to Our Restaurant\",\n    \"footerText\": \"Visit us again! Thank you for dining with us!\",\n    \"showTaxBreakdown\": true,\n    \"showItemCodes\": false,\n    \"paperWidth\": 80,\n    \"fontSizeMultiplier\": 1.2\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Customize receipt appearance (logo, QR code, header, footer, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "5. Update Payment Methods (UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethods\": {\n    \"cash\": {\n      \"enabled\": true,\n      \"taxRateOverride\": 5\n    },\n    \"card\": {\n      \"enabled\": true,\n      \"taxRateOverride\": 16,\n      \"minAmount\": 10\n    },\n    \"mobile\": {\n      \"enabled\": true,\n      \"taxRateOverride\": null\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Configure payment methods (enable/disable, tax overrides, minimum amounts)."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Disable Cash Payment (UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethods\": {\n    \"cash\": {\n      \"enabled\": false\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Disable cash payments for this branch."
+          },
+          "response": []
+        },
+        {
+          "name": "7. Complete Config Update (UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderPrefix\": \"ORD\",\n  \"receiptFooter\": \"Thank you!\",\n  \"enableHoldOrders\": true,\n  \"enableTableService\": true,\n  \"paymentMode\": \"payLater\",\n  \"receiptConfig\": {\n    \"showLogo\": true,\n    \"logoUrl\": \"https://example.com/restaurant-logo.png\",\n    \"showQRCode\": true,\n    \"qrCodeData\": \"https://restaurant.com/feedback\",\n    \"headerText\": \"Fine Dining Experience\",\n    \"footerText\": \"We hope you enjoyed your meal! Visit us again!\",\n    \"showTaxBreakdown\": true,\n    \"showItemCodes\": false,\n    \"paperWidth\": 80,\n    \"fontSizeMultiplier\": 1.0\n  },\n  \"paymentMethods\": {\n    \"cash\": {\n      \"enabled\": true,\n      \"taxRateOverride\": 5\n    },\n    \"card\": {\n      \"enabled\": true,\n      \"taxRateOverride\": 16,\n      \"minAmount\": 0\n    },\n    \"mobile\": {\n      \"enabled\": true,\n      \"taxRateOverride\": null\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Update all POS configuration settings at once."
+          },
+          "response": []
+        },
+        {
+          "name": "8. Reset Receipt Config to Defaults (UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiptConfig\": {\n    \"showLogo\": false,\n    \"logoUrl\": \"\",\n    \"showQRCode\": false,\n    \"qrCodeData\": \"\",\n    \"headerText\": \"\",\n    \"footerText\": \"Thank you for your business!\",\n    \"showTaxBreakdown\": true,\n    \"showItemCodes\": false,\n    \"paperWidth\": 80,\n    \"fontSizeMultiplier\": 1.0\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Reset receipt configuration to default values."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Use Cases",
+      "item": [
+        {
+          "name": "Fast Food Setup (Pay Now)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMode\": \"payNow\",\n  \"enableTableService\": false,\n  \"enableHoldOrders\": true,\n  \"receiptConfig\": {\n    \"showLogo\": true,\n    \"logoUrl\": \"https://example.com/fast-food-logo.png\",\n    \"headerText\": \"Fast Food Restaurant\",\n    \"footerText\": \"Thank you! Visit again!\",\n    \"showTaxBreakdown\": true,\n    \"paperWidth\": 80\n  },\n  \"paymentMethods\": {\n    \"cash\": {\n      \"enabled\": true,\n      \"taxRateOverride\": 5\n    },\n    \"card\": {\n      \"enabled\": true,\n      \"taxRateOverride\": 16\n    },\n    \"mobile\": {\n      \"enabled\": true\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Configure branch for fast food / KFC style operation (immediate payment)."
+          },
+          "response": []
+        },
+        {
+          "name": "Fine Dining Setup (Pay Later)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMode\": \"payLater\",\n  \"enableTableService\": true,\n  \"enableHoldOrders\": true,\n  \"receiptConfig\": {\n    \"showLogo\": true,\n    \"logoUrl\": \"https://example.com/fine-dining-logo.png\",\n    \"showQRCode\": true,\n    \"qrCodeData\": \"https://restaurant.com/feedback\",\n    \"headerText\": \"Fine Dining Experience\",\n    \"footerText\": \"We hope you enjoyed your meal! Please visit us again.\",\n    \"showTaxBreakdown\": true,\n    \"showItemCodes\": false,\n    \"paperWidth\": 80,\n    \"fontSizeMultiplier\": 1.1\n  },\n  \"paymentMethods\": {\n    \"cash\": {\n      \"enabled\": true,\n      \"taxRateOverride\": null\n    },\n    \"card\": {\n      \"enabled\": true,\n      \"taxRateOverride\": null\n    },\n    \"mobile\": {\n      \"enabled\": true\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Configure branch for fine dining / restaurant style operation (pay after meal)."
+          },
+          "response": []
+        },
+        {
+          "name": "Cafe Setup (Pay Now + QR Code)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenant_slug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMode\": \"payNow\",\n  \"enableTableService\": false,\n  \"receiptConfig\": {\n    \"showLogo\": true,\n    \"logoUrl\": \"https://example.com/cafe-logo.png\",\n    \"showQRCode\": true,\n    \"qrCodeData\": \"https://cafe.com/loyalty-program\",\n    \"headerText\": \"Welcome to Our Cafe\",\n    \"footerText\": \"Scan QR code to join our loyalty program!\",\n    \"showTaxBreakdown\": true,\n    \"paperWidth\": 58\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/t/branches/{{branch_id}}/pos-config",
+              "host": ["{{base_url}}"],
+              "path": ["t", "branches", "{{branch_id}}", "pos-config"]
+            },
+            "description": "Configure branch for cafe with loyalty program QR code."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3004",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_JWT_TOKEN_HERE",
+      "type": "string"
+    },
+    {
+      "key": "tenant_slug",
+      "value": "faraz",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "695c0a424a21fc8972afb942",
+      "type": "string"
+    }
+  ]
+}
+
