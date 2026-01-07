@@ -509,7 +509,7 @@ class TenantAuthService {
     }
 
     // Connect to tenant DB
-    const conn = await getTenantConnection(tenantSlug, tenant.dbURI);
+    const conn = await getTenantConnection(tenantSlug, tenant.dbUri);
 
     // Check if user exists
     const userDoc = await TenantUserRepo.getByEmail(conn, normalizedEmail);
@@ -553,7 +553,7 @@ class TenantAuthService {
     }
 
     // Connect to tenant DB
-    const conn = await getTenantConnection(tenantSlug, tenant.dbURI);
+    const conn = await getTenantConnection(tenantSlug, tenant.dbUri);
 
     // Check if user exists
     const userDoc = await TenantUserRepo.getByEmail(conn, normalizedEmail);
@@ -590,7 +590,7 @@ class TenantAuthService {
     }
 
     // Connect to tenant DB
-    const conn = await getTenantConnection(otpRecord.tenantSlug, tenant.dbURI);
+    const conn = await getTenantConnection(otpRecord.tenantSlug, tenant.dbUri);
 
     // Find user
     const userDoc = await TenantUserRepo.getDocByEmail(conn, normalizedEmail);
