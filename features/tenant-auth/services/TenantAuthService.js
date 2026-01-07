@@ -475,19 +475,23 @@ class TenantAuthService {
 
   /**
    * Request OTP for tenant password reset
-   * Tenant is resolved from email domain
+   * Tenant is resolved from Main DB TenantUserDirectory
    */
   static async requestPasswordResetOTP({ email }, metadata = {}) {
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Extract tenant slug from email domain
-    const emailParts = normalizedEmail.split('@');
-    if (emailParts.length !== 2) {
-      throw new AppError('Invalid email format', 400);
+    // Look up tenant from Main DB directory
+    const directoryEntry = await TenantUserDirectoryRepo.findByEmail(normalizedEmail);
+    
+    if (!directoryEntry) {
+      // Don't reveal if user exists or not (security best practice)
+      return {
+        status: 200,
+        message: 'If an account exists with this email, an OTP has been sent.'
+      };
     }
 
-    const domain = emailParts[1];
-    const tenantSlug = domain.split('.')[0]; // e.g., user@acme.com -> acme
+    const tenantSlug = directoryEntry.tenantSlug;
 
     // Verify tenant exists
     const tenant = await Tenant.findOne({ slug: tenantSlug });
@@ -518,18 +522,19 @@ class TenantAuthService {
 
   /**
    * Verify OTP for tenant password reset
+   * Tenant is resolved from Main DB TenantUserDirectory
    */
   static async verifyPasswordResetOTP({ email, otp }) {
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Extract tenant slug from email domain
-    const emailParts = normalizedEmail.split('@');
-    if (emailParts.length !== 2) {
-      throw new AppError('Invalid email format', 400);
+    // Look up tenant from Main DB directory
+    const directoryEntry = await TenantUserDirectoryRepo.findByEmail(normalizedEmail);
+    
+    if (!directoryEntry) {
+      throw new AppError('User not found', 404);
     }
 
-    const domain = emailParts[1];
-    const tenantSlug = domain.split('.')[0];
+    const tenantSlug = directoryEntry.tenantSlug;
 
     // Verify tenant exists
     const tenant = await Tenant.findOne({ slug: tenantSlug });

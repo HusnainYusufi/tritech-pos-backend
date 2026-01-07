@@ -13,7 +13,7 @@ This document describes the **OTP-based password reset** feature for both **Admi
 ✅ **5 verification attempts** - Prevents brute force  
 ✅ **Rate limiting** - 3 requests per 15 minutes per email  
 ✅ **Email delivery** - Professional HTML templates  
-✅ **Multi-tenant support** - Works for admin and tenant users  
+✅ **Multi-tenant support** - Uses TenantUserDirectory for tenant resolution  
 ✅ **Automatic cleanup** - Expired OTPs are auto-deleted  
 ✅ **One-time use** - OTP is invalidated after password reset  
 

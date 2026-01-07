@@ -75,7 +75,7 @@ POST http://localhost:3000/t/auth/login
 ## 📋 Key Points
 
 ✅ **No authentication required** - All endpoints are public  
-✅ **No tenant header required** - Tenant resolved from email domain  
+✅ **No tenant header required** - Tenant resolved from TenantUserDirectory  
 ✅ **3-step process** - Request → Verify → Reset  
 ✅ **10-minute expiry** - OTP valid for 10 minutes  
 ✅ **5 attempts** - Maximum 5 verification attempts  
