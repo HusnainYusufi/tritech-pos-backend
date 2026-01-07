@@ -509,7 +509,7 @@ class TenantAuthService {
     }
 
     // Connect to tenant DB
-    const conn = await getTenantConnection(tenant.dbURI);
+    const conn = await getTenantConnection(tenantSlug, tenant.dbURI);
 
     // Check if user exists
     const userDoc = await TenantUserRepo.getByEmail(conn, normalizedEmail);
@@ -553,7 +553,7 @@ class TenantAuthService {
     }
 
     // Connect to tenant DB
-    const conn = await getTenantConnection(tenant.dbURI);
+    const conn = await getTenantConnection(tenantSlug, tenant.dbURI);
 
     // Check if user exists
     const userDoc = await TenantUserRepo.getByEmail(conn, normalizedEmail);
@@ -584,8 +584,13 @@ class TenantAuthService {
       throw new AppError('Tenant not found', 404);
     }
 
+    // Check if tenant is suspended
+    if (tenant.status === 'suspended') {
+      throw new AppError('This account has been suspended. Please contact support.', 403);
+    }
+
     // Connect to tenant DB
-    const conn = await getTenantConnection(tenant.dbURI);
+    const conn = await getTenantConnection(otpRecord.tenantSlug, tenant.dbURI);
 
     // Find user
     const userDoc = await TenantUserRepo.getDocByEmail(conn, normalizedEmail);
