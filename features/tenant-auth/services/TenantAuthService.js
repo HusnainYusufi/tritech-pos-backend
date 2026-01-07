@@ -503,6 +503,11 @@ class TenantAuthService {
       };
     }
 
+    // Check if tenant is suspended
+    if (tenant.status === 'suspended') {
+      throw new AppError('This account has been suspended. Please contact support.', 403);
+    }
+
     // Connect to tenant DB
     const conn = await getTenantConnection(tenant.dbURI);
 
@@ -540,6 +545,11 @@ class TenantAuthService {
     const tenant = await Tenant.findOne({ slug: tenantSlug });
     if (!tenant) {
       throw new AppError('Tenant not found', 404);
+    }
+
+    // Check if tenant is suspended
+    if (tenant.status === 'suspended') {
+      throw new AppError('This account has been suspended. Please contact support.', 403);
     }
 
     // Connect to tenant DB
