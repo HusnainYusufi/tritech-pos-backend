@@ -7,7 +7,7 @@ const logger = require('../../../modules/logger');
 const AppError = require('../../../modules/AppError');
 
 const TenantAuthService = require('../services/TenantAuthService');
-const { registerOwner, login, loginPin, logoutPin, forgotPassword, resetPassword } = require('../validation/tenantAuth.validation');
+const { registerOwner, login, loginPin, logoutPin, forgotPassword, resetPassword, requestOTP, verifyOTP, resetPasswordWithOTP } = require('../validation/tenantAuth.validation');
 
 // NOTE: tenantContext is applied selectively below
 // accept-invite is PUBLIC and does NOT use tenantContext
@@ -457,6 +457,143 @@ router.get('/me', tenantContext, async (req, res, next) => {
     const uid = req.user?.uid;
     if (!uid) throw new AppError('Unauthorized', 401);
     const r = await TenantAuthService.me(req.tenantDb, { uid });
+    return res.status(r.status).json(r);
+  } catch (e) { logger.error(e); next(e); }
+});
+
+// ==================== OTP-BASED PASSWORD RESET ====================
+
+/**
+ * @swagger
+ * /t/auth/password-reset/request-otp:
+ *   post:
+ *     tags:
+ *       - Tenant Authentication
+ *     summary: Request OTP for password reset (Tenant)
+ *     description: |
+ *       Sends a 6-digit OTP to the tenant user's email for password reset.
+ *       Tenant is automatically resolved from email domain (e.g., user@acme.com -> tenant: acme).
+ *       This is a PUBLIC endpoint - no authentication or tenant header required.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@restaurant.com
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: OTP sent to your email. Please check your inbox.
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/password-reset/request-otp', validate(requestOTP), async (req, res, next) => {
+  try {
+    const metadata = {
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.get('user-agent')
+    };
+    const r = await TenantAuthService.requestPasswordResetOTP(req.body, metadata);
+    return res.status(r.status).json(r);
+  } catch (e) { logger.error(e); next(e); }
+});
+
+/**
+ * @swagger
+ * /t/auth/password-reset/verify-otp:
+ *   post:
+ *     tags:
+ *       - Tenant Authentication
+ *     summary: Verify OTP for password reset (Tenant)
+ *     description: |
+ *       Verifies the 6-digit OTP sent to the tenant user's email.
+ *       This is a PUBLIC endpoint - no authentication or tenant header required.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@restaurant.com
+ *               otp:
+ *                 type: string
+ *                 pattern: '^[0-9]{6}$'
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *       400:
+ *         description: Invalid OTP or max attempts exceeded
+ */
+router.post('/password-reset/verify-otp', validate(verifyOTP), async (req, res, next) => {
+  try {
+    const r = await TenantAuthService.verifyPasswordResetOTP(req.body);
+    return res.status(r.status).json(r);
+  } catch (e) { logger.error(e); next(e); }
+});
+
+/**
+ * @swagger
+ * /t/auth/password-reset/reset:
+ *   post:
+ *     tags:
+ *       - Tenant Authentication
+ *     summary: Reset password with verified OTP (Tenant)
+ *     description: |
+ *       Resets the tenant user's password after OTP verification.
+ *       This is a PUBLIC endpoint - no authentication or tenant header required.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@restaurant.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 example: NewSecurePass123!
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *       400:
+ *         description: No verified OTP found or invalid request
+ */
+router.post('/password-reset/reset', validate(resetPasswordWithOTP), async (req, res, next) => {
+  try {
+    const r = await TenantAuthService.resetPasswordWithOTP(req.body);
     return res.status(r.status).json(r);
   } catch (e) { logger.error(e); next(e); }
 });

@@ -22,4 +22,29 @@ const resetPassword = Joi.object({
   password: Joi.string().min(8).max(128).required()
 });
 
-module.exports = { register, login, forgotPassword, resetPassword };
+// OTP-based password reset validations
+const requestOTP = Joi.object({
+  email: Joi.string().email().required()
+});
+
+const verifyOTP = Joi.object({
+  email: Joi.string().email().required(),
+  otp: Joi.string().pattern(/^[0-9]{6}$/).required().messages({
+    'string.pattern.base': 'OTP must be exactly 6 digits'
+  })
+});
+
+const resetPasswordWithOTP = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(8).max(128).required()
+});
+
+module.exports = { 
+  register, 
+  login, 
+  forgotPassword, 
+  resetPassword,
+  requestOTP,
+  verifyOTP,
+  resetPasswordWithOTP
+};

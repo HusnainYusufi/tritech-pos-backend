@@ -52,6 +52,14 @@ class Base {
                 { url: "/t/auth/reset-password", methods: ['POST'] },
                 { url: "/t/auth/register-owner", methods: ['POST'] },
                 
+                // OTP-based password reset endpoints (PUBLIC)
+                { url: "/auth/password-reset/request-otp", methods: ['POST'] },
+                { url: "/auth/password-reset/verify-otp", methods: ['POST'] },
+                { url: "/auth/password-reset/reset", methods: ['POST'] },
+                { url: "/t/auth/password-reset/request-otp", methods: ['POST'] },
+                { url: "/t/auth/password-reset/verify-otp", methods: ['POST'] },
+                { url: "/t/auth/password-reset/reset", methods: ['POST'] },
+                
                 // PUBLIC endpoints for cashier login screen
                 // Cashiers need to see branches and terminals BEFORE logging in
                 { url: "/t/branches", methods: ['GET'] },           // Branch list for dropdown

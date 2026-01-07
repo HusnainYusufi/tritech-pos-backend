@@ -12,6 +12,7 @@ const { hasTenantScope, branchGuard, posGuard } = require('./tenantGuards');
 const PosTerminalService = require('../../pos/services/PosTerminalService');
 const { getTenantConnection } = require('../../../modules/connectionManager');
 const Tenant = require('../../tenant/model/Tenant.model');
+const OTPService = require('../../auth/services/OTPService');
 
 const JWT_SECRET = process.env.JWT_SECRET_KEY;
 const TOKEN_TTL_DAYS = parseInt(process.env.JWT_TTL_DAYS || '7', 10);
@@ -466,6 +467,134 @@ class TenantAuthService {
       result: {
         ...user,
         branchConfig
+      }
+    };
+  }
+
+  // ==================== OTP-BASED PASSWORD RESET ====================
+
+  /**
+   * Request OTP for tenant password reset
+   * Tenant is resolved from email domain
+   */
+  static async requestPasswordResetOTP({ email }, metadata = {}) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Extract tenant slug from email domain
+    const emailParts = normalizedEmail.split('@');
+    if (emailParts.length !== 2) {
+      throw new AppError('Invalid email format', 400);
+    }
+
+    const domain = emailParts[1];
+    const tenantSlug = domain.split('.')[0]; // e.g., user@acme.com -> acme
+
+    // Verify tenant exists
+    const tenant = await Tenant.findOne({ slug: tenantSlug });
+    if (!tenant) {
+      // Don't reveal if tenant exists or not
+      return {
+        status: 200,
+        message: 'If an account exists with this email, an OTP has been sent.'
+      };
+    }
+
+    // Connect to tenant DB
+    const conn = await getTenantConnection(tenant.dbURI);
+
+    // Check if user exists
+    const userDoc = await TenantUserRepo.getByEmail(conn, normalizedEmail);
+    if (!userDoc) {
+      // Don't reveal if user exists or not
+      return {
+        status: 200,
+        message: 'If an account exists with this email, an OTP has been sent.'
+      };
+    }
+
+    // Request OTP
+    return await OTPService.requestOTP(normalizedEmail, 'tenant', tenantSlug, metadata);
+  }
+
+  /**
+   * Verify OTP for tenant password reset
+   */
+  static async verifyPasswordResetOTP({ email, otp }) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Extract tenant slug from email domain
+    const emailParts = normalizedEmail.split('@');
+    if (emailParts.length !== 2) {
+      throw new AppError('Invalid email format', 400);
+    }
+
+    const domain = emailParts[1];
+    const tenantSlug = domain.split('.')[0];
+
+    // Verify tenant exists
+    const tenant = await Tenant.findOne({ slug: tenantSlug });
+    if (!tenant) {
+      throw new AppError('Tenant not found', 404);
+    }
+
+    // Connect to tenant DB
+    const conn = await getTenantConnection(tenant.dbURI);
+
+    // Check if user exists
+    const userDoc = await TenantUserRepo.getByEmail(conn, normalizedEmail);
+    if (!userDoc) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Verify OTP
+    return await OTPService.verifyOTP(normalizedEmail, otp);
+  }
+
+  /**
+   * Reset password with verified OTP
+   */
+  static async resetPasswordWithOTP({ email, password }) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Validate that OTP was verified
+    const otpRecord = await OTPService.validateVerifiedOTP(normalizedEmail);
+
+    if (otpRecord.userType !== 'tenant') {
+      throw new AppError('Invalid OTP for tenant user', 400);
+    }
+
+    // Verify tenant exists
+    const tenant = await Tenant.findOne({ slug: otpRecord.tenantSlug });
+    if (!tenant) {
+      throw new AppError('Tenant not found', 404);
+    }
+
+    // Connect to tenant DB
+    const conn = await getTenantConnection(tenant.dbURI);
+
+    // Find user
+    const userDoc = await TenantUserRepo.getDocByEmail(conn, normalizedEmail);
+    if (!userDoc) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Update password
+    userDoc.passwordHash = await bcrypt.hash(password, 10);
+    userDoc.resetToken = null;
+    userDoc.resetTokenExpiresAt = null;
+    await userDoc.save();
+
+    // Mark OTP as used
+    await OTPService.markOTPAsUsed(normalizedEmail);
+
+    logger.info(`Tenant password reset successful for: ${normalizedEmail} (tenant: ${otpRecord.tenantSlug})`);
+
+    return {
+      status: 200,
+      message: 'Password reset successful. You can now login with your new password.',
+      result: {
+        email: normalizedEmail,
+        tenantSlug: otpRecord.tenantSlug
       }
     };
   }
