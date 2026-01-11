@@ -3,6 +3,7 @@
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser'); // Ensure cookieParser is imported correctly
 const express = require('express');
+const cors = require('cors');
 const { httpsCodes } = require('../modules/constants');
 const { language } = require('../language/language');
 const { unless } = require('express-unless');
@@ -18,6 +19,46 @@ class Base {
         app.use(bodyParser.json({ limit: '100mb' }));
         app.use(bodyParser.urlencoded({ limit: '100mb', extended: false }));
         app.use(cookieParser());
+
+        // CORS (must run BEFORE auth middleware, and must properly answer OPTIONS preflights)
+        const parseOrigins = (val) =>
+            String(val || '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+
+        const allowedOrigins = parseOrigins(process.env.CORS_ORIGINS);
+        // Safe defaults for local/dev if env isn't set (do NOT add "*" if using credentials)
+        if (allowedOrigins.length === 0) {
+            allowedOrigins.push('http://localhost:3003', 'http://localhost:3000', 'http://localhost:5173');
+        }
+
+        const corsOptions = {
+            origin: (origin, cb) => {
+                // allow non-browser clients (no Origin header)
+                if (!origin) return cb(null, true);
+                if (allowedOrigins.includes(origin)) return cb(null, true);
+                return cb(null, false);
+            },
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+            allowedHeaders: [
+                'Origin',
+                'X-Requested-With',
+                'Content-Type',
+                'Accept',
+                'Authorization',
+                'x-tenant-id',
+                'x-branch-id',
+                'x-pos-id',
+                'x-terminal-id'
+            ],
+            optionsSuccessStatus: 204,
+            maxAge: 86400
+        };
+
+        app.use(cors(corsOptions));
+        app.options('*', cors(corsOptions));
 
 
         await connectDB();
@@ -69,26 +110,6 @@ class Base {
 
             ]
         }));
-
-        // app.use((req, res, next) => {
-
-        //     res.header('Access-Control-Allow-Origin', '*');
-
-        //     // Allow specific headers
-        //     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-
-        //     // Allow specific HTTP methods
-        //     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-
-
-        //     if (req.method === 'OPTIONS') {
-        //         return res.status(200).end(); // Respond OK to preflight request
-        //     }
-
-
-        //     next();
-        // });
-
 
         app.listen(process.env.PORT, () => {
             console.log('Server running on port', process.env.PORT);
