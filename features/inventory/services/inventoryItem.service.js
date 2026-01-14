@@ -35,8 +35,11 @@ class InventoryItemService {
   }
 
   let sku;
+  let isManualSku = false;
+  
   if (d.sku && d.sku.trim()) {
     sku = d.sku.trim();
+    isManualSku = true;
   } else {
     try {
       sku = await nextSku(conn, tenantSlug);
@@ -59,9 +62,12 @@ class InventoryItemService {
     }
   }
 
-  // enforce unique sku (rare race can be caught by unique index)
-  const dup = await ItemRepo.getBySku(conn, sku);
-  if (dup) throw new AppError('SKU already exists', 409);
+  // Only enforce unique SKU check for manually provided SKUs
+  // Auto-generated SKUs are unique by design (counter-based)
+  if (isManualSku) {
+    const dup = await ItemRepo.getBySku(conn, sku);
+    if (dup) throw new AppError('SKU already exists', 409);
+  }
 
   // ✅ unify units from both API and Excel import
   const baseUnit = d.baseUnit || d.usageUnit || '';
