@@ -38,4 +38,12 @@ module.exports.routes = (app) => {
   app.use('/t/pos', require('../features/pos/controller/PosTerminalController'));
   app.use('/t/pos', require('../features/pos/controller/PosOrderController'));
 
+  // ============================================================
+  // INTEGRATIONS
+  // ============================================================
+  
+  // Boomerangme Loyalty Platform Integration
+  // @see https://docs.boomerangme.cards/marketplace/create-an-application
+  app.use('/integrations/boomerangme', require('../features/integrations/boomerangme/controller/BoomerangmeController'));
+
 };
