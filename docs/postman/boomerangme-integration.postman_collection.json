@@ -1,0 +1,270 @@
+{
+  "info": {
+    "name": "Boomerangme Integration",
+    "description": "Boomerangme Loyalty Platform Integration endpoints.\n\nThese are the inbound endpoints that Boomerangme calls to verify credentials and fetch inventory.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "tenantSlug",
+      "value": "your-tenant-slug",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "your-secret-api-key",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "your-jwt-token",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Inbound (Boomerangme calls us)",
+      "description": "These endpoints are called by Boomerangme platform. They are PUBLIC (no JWT required).",
+      "item": [
+        {
+          "name": "Check Credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenantSlug}}",
+                "description": "Tenant identifier"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"name\": \"tenantSlug\",\n    \"value\": \"{{tenantSlug}}\"\n  },\n  {\n    \"name\": \"apiKey\",\n    \"value\": \"{{apiKey}}\"\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/integrations/boomerangme/check-credentials",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "boomerangme", "check-credentials"]
+            },
+            "description": "Called by Boomerangme during app installation to verify that the provided credentials are valid.\n\n**Response:**\n```json\n{\n  \"isValid\": true\n}\n```"
+          },
+          "response": [
+            {
+              "name": "Valid Credentials",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"isValid\": true\n}"
+            },
+            {
+              "name": "Invalid Credentials",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"isValid\": false\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Inventory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenantSlug}}",
+                "description": "Tenant identifier"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"name\": \"tenantSlug\",\n    \"value\": \"{{tenantSlug}}\"\n  },\n  {\n    \"name\": \"apiKey\",\n    \"value\": \"{{apiKey}}\"\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/integrations/boomerangme/get-inventory",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "boomerangme", "get-inventory"]
+            },
+            "description": "Called by Boomerangme to fetch menu structure for item-based loyalty rules.\n\n**Response:**\n```json\n{\n  \"inventoryItems\": [\n    {\n      \"type\": \"group\",\n      \"id\": \"cat_123\",\n      \"title\": \"Burgers\",\n      \"items\": [\n        {\n          \"type\": \"item\",\n          \"id\": \"item_456\",\n          \"title\": \"Classic Burger\",\n          \"price\": 12.99\n        }\n      ]\n    }\n  ]\n}\n```"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"inventoryItems\": [\n    {\n      \"type\": \"group\",\n      \"id\": \"6789abcd1234567890abcdef\",\n      \"title\": \"Burgers\",\n      \"items\": [\n        {\n          \"type\": \"item\",\n          \"id\": \"1234567890abcdef12345678\",\n          \"title\": \"Classic Burger\",\n          \"price\": 12.99,\n          \"code\": \"BRG001\"\n        },\n        {\n          \"type\": \"item\",\n          \"id\": \"abcdef1234567890abcdef12\",\n          \"title\": \"Cheese Burger\",\n          \"price\": 14.99,\n          \"code\": \"BRG002\"\n        }\n      ]\n    },\n    {\n      \"type\": \"group\",\n      \"id\": \"abcd1234567890abcdef6789\",\n      \"title\": \"Beverages\",\n      \"items\": [\n        {\n          \"type\": \"item\",\n          \"id\": \"567890abcdef1234567890ab\",\n          \"title\": \"Cola\",\n          \"price\": 2.99,\n          \"code\": \"BEV001\"\n        }\n      ]\n    }\n  ]\n}"
+            },
+            {
+              "name": "Invalid Credentials",
+              "status": "Unauthorized",
+              "code": 401,
+              "body": "{\n  \"error\": \"Invalid credentials\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin Configuration",
+      "description": "Configure the Boomerangme integration. Requires JWT authentication.",
+      "item": [
+        {
+          "name": "Get Config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenantSlug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/integrations/boomerangme/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "boomerangme", "config"]
+            },
+            "description": "Get current Boomerangme configuration. Sensitive fields are masked."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isEnabled\": true,\n  \"appToken\": \"your-boomerangme-app-token\",\n  \"credentials\": [\n    {\n      \"name\": \"tenantSlug\",\n      \"value\": \"{{tenantSlug}}\"\n    },\n    {\n      \"name\": \"apiKey\",\n      \"value\": \"{{apiKey}}\"\n    }\n  ],\n  \"webhookSecret\": \"optional-webhook-secret\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/integrations/boomerangme/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "boomerangme", "config"]
+            },
+            "description": "Update Boomerangme configuration.\n\n**Required fields to enable:**\n- `isEnabled`: true\n- `appToken`: Your X-App-Token from Boomerangme\n- `credentials`: Array of credentials Boomerangme will use to identify you"
+          },
+          "response": []
+        },
+        {
+          "name": "Test Connection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenantSlug}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/integrations/boomerangme/test",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "boomerangme", "test"]
+            },
+            "description": "Test connection to Boomerangme API using configured appToken."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhooks (Trigger Loyalty)",
+      "description": "Call these webhooks from your frontend/backend to trigger loyalty actions.",
+      "item": [
+        {
+          "name": "Order Completed (Accrue Points)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"507f1f77bcf86cd799439011\",\n  \"customerPhone\": \"+1234567890\",\n  \"customerEmail\": \"customer@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/integrations/boomerangme/webhook/order-completed",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "boomerangme", "webhook", "order-completed"]
+            },
+            "description": "Trigger loyalty accrual after an order is paid.\n\n**Required:**\n- `orderId`: The POS order ID\n\n**Optional:**\n- `customerPhone`: Customer phone (falls back to order.customerPhone)\n- `customerEmail`: Customer email"
+          },
+          "response": []
+        },
+        {
+          "name": "Order Refunded (Reverse Points)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "x-tenant-id",
+                "value": "{{tenantSlug}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"507f1f77bcf86cd799439011\",\n  \"transactionId\": \"txn_123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/integrations/boomerangme/webhook/order-refunded",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "boomerangme", "webhook", "order-refunded"]
+            },
+            "description": "Reverse loyalty points when an order is refunded.\n\n**Required:**\n- `orderId`: The POS order ID\n\n**Optional:**\n- `transactionId`: Boomerangme transaction ID (defaults to orderId)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

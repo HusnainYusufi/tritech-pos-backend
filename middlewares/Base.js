@@ -106,7 +106,10 @@ class Base {
                 { url: "/t/branches", methods: ['GET'] },           // Branch list for dropdown
                 { url: "/t/pos/terminals", methods: ['GET'] },      // Terminal list for dropdown
 
-
+                // Boomerangme Integration (PUBLIC - called by Boomerangme platform)
+                // These endpoints validate credentials internally, JWT not required
+                { url: "/integrations/boomerangme/check-credentials", methods: ['POST'] },
+                { url: "/integrations/boomerangme/get-inventory", methods: ['POST'] },
 
             ]
         }));
