@@ -25,6 +25,7 @@ module.exports = (Schema) => {
 
     isStaff: { type: Boolean, default: false },
     position: { type: String, trim: true, maxlength: 120 },
+    employeeId: { type: String, trim: true, uppercase: true, default: null }, // EMP-XXXXXX for PIN login
 
     pinHash: { type: String, default: null },
     pinKey:  { type: String, default: null }, // deterministic, peppered fingerprint for uniqueness checks

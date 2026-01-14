@@ -135,9 +135,16 @@ class StaffService {
     await ensureEmailAvailable(conn, email);
 
     const { pinHash, pinKey, pinUpdatedAt } = await buildPinSecrets(pin);
-    if (pinKey) {
+    
+    // Generate unique Employee ID if PIN is being set
+    let employeeId = null;
+    if (pinKey && tenantSlug) {
+      // Check PIN uniqueness within tenant (not globally)
       const existingPin = await TenantUserRepo.model(conn).findOne({ pinKey }).lean();
-      if (existingPin) throw new AppError('PIN already in use', 409);
+      if (existingPin) throw new AppError('PIN already in use by another staff member', 409);
+      
+      // Generate unique Employee ID
+      employeeId = await TenantPinDirectoryRepo.generateUniqueEmployeeId();
     }
 
     const passwordHash = await bcrypt.hash(password || crypto.randomBytes(12).toString('hex'), PASSWORD_ROUNDS);
@@ -156,6 +163,7 @@ class StaffService {
       isStaff: true,
       position: position || undefined,
       metadata: metadata || undefined,
+      employeeId,
       pinHash,
       pinKey,
       pinUpdatedAt,
@@ -171,10 +179,11 @@ class StaffService {
         userType: 'staff'
       });
 
-      // Upsert PIN directory in main DB for PIN resolution without tenant slug
-      if (pinKey) {
+      // Upsert PIN directory in main DB for Employee ID + PIN login
+      if (pinKey && employeeId) {
         try {
           await TenantPinDirectoryRepo.upsert({
+            employeeId,
             pinKey,
             tenantSlug,
             tenantUserId: doc._id,
@@ -182,10 +191,9 @@ class StaffService {
             posIds: doc.posIds || [],
             status: doc.status || 'active'
           });
+          logger.info('[StaffService.create] Employee ID generated', { employeeId, email: doc.email });
         } catch (e) {
-          const logger = require('../../../modules/logger');
           logger.error('[StaffService.create] Failed to upsert PIN directory', e);
-          // Do not fail creation on directory sync issues
         }
       }
     }
@@ -357,8 +365,16 @@ class StaffService {
 
     const { pinHash, pinKey, pinUpdatedAt } = await buildPinSecrets(payload.pin);
     if (pinKey) {
+      // Check PIN uniqueness within tenant (not globally)
       const existing = await User.findOne({ _id: { $ne: id }, pinKey }).lean();
-      if (existing) throw new AppError('PIN already in use', 409);
+      if (existing) throw new AppError('PIN already in use by another staff member', 409);
+    }
+
+    // Generate Employee ID if not already set
+    let employeeId = userDoc.employeeId;
+    if (pinKey && !employeeId && payload.tenantSlug) {
+      employeeId = await TenantPinDirectoryRepo.generateUniqueEmployeeId();
+      userDoc.employeeId = employeeId;
     }
 
     userDoc.pinHash = pinHash;
@@ -369,10 +385,11 @@ class StaffService {
 
     const saved = await userDoc.save();
 
-    // Sync PIN directory
-    if (payload.tenantSlug && userDoc.pinKey) {
+    // Sync PIN directory with Employee ID
+    if (payload.tenantSlug && userDoc.pinKey && userDoc.employeeId) {
       try {
         await TenantPinDirectoryRepo.upsert({
+          employeeId: userDoc.employeeId,
           pinKey: userDoc.pinKey,
           tenantSlug: payload.tenantSlug,
           tenantUserId: userDoc._id,
@@ -380,8 +397,11 @@ class StaffService {
           posIds: userDoc.posIds || [],
           status: userDoc.status || 'active'
         });
+        logger.info('[StaffService.setPin] PIN updated with Employee ID', { 
+          employeeId: userDoc.employeeId, 
+          email: userDoc.email 
+        });
       } catch (e) {
-        const logger = require('../../../modules/logger');
         logger.error('[StaffService.setPin] Failed to upsert PIN directory', e);
       }
     }

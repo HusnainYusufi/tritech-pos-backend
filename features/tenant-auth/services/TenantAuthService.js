@@ -126,20 +126,26 @@ class TenantAuthService {
   }
 
   /**
-   * Public PIN login without requiring tenantSlug from client.
+   * Secure PIN login requiring Employee ID + PIN.
    * Steps:
-   * 1) Compute pinKey from PIN
-   * 2) Resolve tenant via main DB pin directory
+   * 1) Lookup tenant via Employee ID from main DB directory
+   * 2) Compute pinKey and validate within that tenant's scope
    * 3) Connect to tenant DB and validate pinHash + status + branch/POS checks
+   * 
+   * SECURITY: Employee ID scopes the lookup to prevent cross-tenant PIN collisions.
    */
-  static async loginWithPin(_conn, { pin, terminalId } /* tenantSlug ignored */) {
-    const pinKey = buildPinKey(pin);
-
-    // 1) Resolve tenant + user via main DB directory
+  static async loginWithPin(_conn, { employeeId, pin, terminalId } /* tenantSlug ignored */) {
+    if (!employeeId) throw new AppError('Employee ID is required', 400);
+    
+    // 1) Resolve tenant + user via Employee ID (globally unique)
     const pinDirectoryRepo = require('../repository/tenantPinDirectory.repository');
-    const pinEntry = await pinDirectoryRepo.findByPinKey(pinKey);
+    const pinEntry = await pinDirectoryRepo.findByEmployeeId(employeeId);
     if (!pinEntry) throw new AppError('Invalid credentials', 401);
     if (pinEntry.status && pinEntry.status !== 'active') throw new AppError('Account is not active', 403);
+    
+    // 2) Verify PIN matches (within tenant scope)
+    const pinKey = buildPinKey(pin);
+    if (pinEntry.pinKey !== pinKey) throw new AppError('Invalid credentials', 401);
 
     // 2) Get tenant connection
     const Tenant = require('../../tenant/model/Tenant.model');

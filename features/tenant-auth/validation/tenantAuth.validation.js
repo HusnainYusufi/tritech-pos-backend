@@ -20,6 +20,10 @@ const login = Joi.object({
 const money = Joi.number().min(0);
 
 const loginPin = Joi.object({
+  employeeId: Joi.string().pattern(/^EMP-[A-Z0-9]{6}$/i).required().messages({
+    'string.pattern.base': 'Employee ID must be in format EMP-XXXXXX',
+    'any.required': 'Employee ID is required'
+  }),
   pin: Joi.string().pattern(/^[0-9]{6}$/).required().messages({
     'string.pattern.base': 'PIN must be exactly 6 digits'
   })
