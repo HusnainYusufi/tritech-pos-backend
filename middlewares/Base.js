@@ -28,10 +28,24 @@ class Base {
                 .filter(Boolean);
 
         const allowedOrigins = parseOrigins(process.env.CORS_ORIGINS);
-        // Safe defaults for local/dev if env isn't set (do NOT add "*" if using credentials)
-        if (allowedOrigins.length === 0) {
-            allowedOrigins.push('http://localhost:3003', 'http://localhost:3000', 'http://localhost:5173');
-        }
+        
+        // Always include localhost origins for development (in addition to any configured origins)
+        // This allows local development to work against any backend (local or production)
+        const localhostOrigins = [
+            'http://localhost:3003',
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://127.0.0.1:3003',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:5173'
+        ];
+        
+        // Merge configured origins with localhost origins (deduplicated)
+        localhostOrigins.forEach(origin => {
+            if (!allowedOrigins.includes(origin)) {
+                allowedOrigins.push(origin);
+            }
+        });
 
         const corsOptions = {
             origin: (origin, cb) => {
@@ -105,6 +119,7 @@ class Base {
                 // Cashiers need to see branches and terminals BEFORE logging in
                 { url: "/t/branches", methods: ['GET'] },           // Branch list for dropdown
                 { url: "/t/pos/terminals", methods: ['GET'] },      // Terminal list for dropdown
+                { url: /^\/t\/branches\/[^/]+\/pos-config$/, methods: ['GET'] }, // Branch POS config for login screen
 
                 // Boomerangme Integration (PUBLIC - called by Boomerangme platform)
                 // These endpoints validate credentials internally, JWT not required
